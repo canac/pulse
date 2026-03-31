@@ -6,10 +6,12 @@ export const TEAM_MEMBERS = [
   "zweatshirt",
 ] as const;
 
+export const GITHUB_ORG = "CruGlobal";
+
 export const REPOS = [
-  { owner: "CruGlobal", name: "conf-registration-web" },
-  { owner: "CruGlobal", name: "mpdx-react" },
-  { owner: "CruGlobal", name: "staff_accounting_app" },
+  "conf-registration-web",
+  "mpdx-react",
+  "staff_accounting_app",
 ] as const;
 
 export const BUSINESS_HOURS = {
