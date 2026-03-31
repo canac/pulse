@@ -68,31 +68,35 @@ export type TimelineItem = z.infer<typeof TimelineItemSchema>;
 // GraphQL Query
 // ---------------------------------------------------------------------------
 
+const PR_FIELDS = `
+  number title url createdAt isDraft state
+  author { login }
+  timelineItems(first: 100, itemTypes: [
+    REVIEW_REQUESTED_EVENT
+    PULL_REQUEST_REVIEW
+    ISSUE_COMMENT
+  ]) {
+    nodes {
+      __typename
+      ... on ReviewRequestedEvent { createdAt requestedReviewer { ... on User { login } } }
+      ... on PullRequestReview { createdAt author { login } }
+      ... on IssueComment { createdAt author { login } }
+    }
+  }
+`;
+
 const PULL_REQUESTS_QUERY = `
-  query($owner: String!, $name: String!, $cursor: String) {
+  query($owner: String!, $name: String!, $cursor: String, $states: [PullRequestState!]) {
     repository(owner: $owner, name: $name) {
       pullRequests(
         first: 100
         after: $cursor
-        states: [OPEN, MERGED, CLOSED]
+        states: $states
         orderBy: { field: CREATED_AT, direction: DESC }
       ) {
         pageInfo { hasNextPage endCursor }
         nodes {
-          number title url createdAt isDraft state
-          author { login }
-          timelineItems(first: 100, itemTypes: [
-            REVIEW_REQUESTED_EVENT
-            PULL_REQUEST_REVIEW
-            ISSUE_COMMENT
-          ]) {
-            nodes {
-              __typename
-              ... on ReviewRequestedEvent { createdAt requestedReviewer { ... on User { login } } }
-              ... on PullRequestReview { createdAt author { login } }
-              ... on IssueComment { createdAt author { login } }
-            }
-          }
+          ${PR_FIELDS}
         }
       }
     }
@@ -103,39 +107,18 @@ const PULL_REQUESTS_QUERY = `
 // GraphQL helper
 // ---------------------------------------------------------------------------
 
-const CACHE_NAME = "github-graphql";
-const CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
-
-async function graphql(
+async function graphqlRequest(
   token: string,
+  query: string,
   variables: Record<string, unknown>,
-  useCache: boolean,
-): Promise<z.infer<typeof QueryResponseSchema>> {
-  const requestBody = JSON.stringify({ query: PULL_REQUESTS_QUERY, variables });
-  // Web Cache API requires a GET-like URL key since POST isn't directly cacheable
-  const cacheKey = `https://api.github.com/graphql?cache=${
-    encodeURIComponent(JSON.stringify(variables))
-  }`;
-
-  if (useCache) {
-    const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(cacheKey);
-    if (cached) {
-      const cachedAt = cached.headers.get("x-cached-at");
-      if (cachedAt && Date.now() - Number(cachedAt) < CACHE_MAX_AGE_MS) {
-        const json = await cached.json();
-        return QueryResponseSchema.parse(json);
-      }
-    }
-  }
-
+): Promise<Record<string, unknown>> {
   const response = await fetch("https://api.github.com/graphql", {
     method: "POST",
     headers: {
       "Authorization": `bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: requestBody,
+    body: JSON.stringify({ query, variables }),
   });
 
   if (!response.ok) {
@@ -153,15 +136,7 @@ async function graphql(
     throw new Error(`GitHub GraphQL errors: ${errorMessages}`);
   }
 
-  if (useCache) {
-    const cache = await caches.open(CACHE_NAME);
-    const cacheResponse = new Response(JSON.stringify(json), {
-      headers: { "x-cached-at": String(Date.now()) },
-    });
-    await cache.put(cacheKey, cacheResponse);
-  }
-
-  return QueryResponseSchema.parse(json);
+  return json;
 }
 
 // ---------------------------------------------------------------------------
@@ -172,26 +147,26 @@ async function fetchAllPagesForRepo(
   token: string,
   repoName: string,
   since: Temporal.Instant,
-  useCache: boolean,
-): Promise<PullRequest[]> {
-  const pullRequests: PullRequest[] = [];
+  states: ("OPEN" | "MERGED" | "CLOSED")[],
+): Promise<Array<PullRequest & { repo: string }>> {
+  const pullRequests: Array<PullRequest & { repo: string }> = [];
   let cursor: string | null = null;
 
   while (true) {
-    const result = await graphql(token, {
+    const json = await graphqlRequest(token, PULL_REQUESTS_QUERY, {
       owner: GITHUB_ORG,
       name: repoName,
       cursor,
-    }, useCache);
+      states,
+    });
 
+    const result = QueryResponseSchema.parse(json);
     const pullRequestsPage = result.data.repository.pullRequests;
     const pageInfo = pullRequestsPage.pageInfo;
 
     let reachedOldPR = false;
     for (const pullRequest of pullRequestsPage.nodes) {
-      if (pullRequest.isDraft) {
-        continue;
-      }
+      if (pullRequest.isDraft) continue;
 
       const prCreatedAt = Temporal.Instant.from(pullRequest.createdAt);
       if (Temporal.Instant.compare(prCreatedAt, since) < 0) {
@@ -199,12 +174,10 @@ async function fetchAllPagesForRepo(
         break;
       }
 
-      pullRequests.push(pullRequest);
+      pullRequests.push({ ...pullRequest, repo: repoName });
     }
 
-    if (reachedOldPR || !pageInfo.hasNextPage) {
-      break;
-    }
+    if (reachedOldPR || !pageInfo.hasNextPage) break;
     cursor = pageInfo.endCursor;
   }
 
@@ -215,13 +188,21 @@ async function fetchAllPagesForRepo(
 // Public API
 // ---------------------------------------------------------------------------
 
+const ALL_STATES: ("OPEN" | "MERGED" | "CLOSED")[] = [
+  "OPEN",
+  "MERGED",
+  "CLOSED",
+];
+
 export async function fetchPullRequests(
   token: string,
-  options: { useCache: boolean; onRepoComplete?: () => void } = {
-    useCache: false,
-  },
-): Promise<PullRequest[]> {
+  options: {
+    states?: ("OPEN" | "MERGED" | "CLOSED")[];
+    onRepoComplete?: () => void;
+  } = {},
+): Promise<Array<PullRequest & { repo: string }>> {
   const since = Temporal.Now.instant().subtract({ hours: LOOKBACK_DAYS * 24 });
+  const states = options.states ?? ALL_STATES;
 
   const results = await Promise.all(
     REPOS.map(async (repoName) => {
@@ -229,7 +210,7 @@ export async function fetchPullRequests(
         token,
         repoName,
         since,
-        options.useCache,
+        states,
       );
       options.onRepoComplete?.();
       return pullRequests;
@@ -237,4 +218,44 @@ export async function fetchPullRequests(
   );
 
   return results.flat();
+}
+
+export async function fetchPullRequestsByNumber(
+  token: string,
+  repo: string,
+  prNumbers: number[],
+): Promise<Array<PullRequest & { repo: string }>> {
+  if (prNumbers.length === 0) return [];
+
+  const prQueries = prNumbers
+    .map((num) => `pr_${num}: pullRequest(number: ${num}) { ${PR_FIELDS} }`)
+    .join("\n    ");
+
+  const query = `
+    query($owner: String!, $name: String!) {
+      repository(owner: $owner, name: $name) {
+        ${prQueries}
+      }
+    }
+  `;
+
+  const json = await graphqlRequest(token, query, {
+    owner: GITHUB_ORG,
+    name: repo,
+  });
+
+  const data = json as { data?: { repository?: Record<string, unknown> } };
+  const repository = data.data?.repository;
+  if (!repository) return [];
+
+  const pullRequests: Array<PullRequest & { repo: string }> = [];
+  for (const num of prNumbers) {
+    const prData = repository[`pr_${num}`];
+    if (prData) {
+      const parsed = PullRequestSchema.parse(prData);
+      pullRequests.push({ ...parsed, repo });
+    }
+  }
+
+  return pullRequests;
 }
