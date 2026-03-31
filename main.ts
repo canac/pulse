@@ -1,4 +1,6 @@
 import { load } from "@std/dotenv";
+import { Spinner } from "@std/cli/unstable-spinner";
+import { REPOS } from "./config.ts";
 import { fetchPullRequests } from "./github.ts";
 import {
   computeStats,
@@ -18,13 +20,20 @@ if (!token) {
   Deno.exit(1);
 }
 
-// Fetch all PRs via async generator, collect into array
-const pullRequests = [];
-for await (
-  const pullRequest of fetchPullRequests(token, { useCache: args.cached })
-) {
-  pullRequests.push(pullRequest);
-}
+// Fetch all PRs (repos fetched in parallel)
+let reposCompleted = 0;
+const spinner = new Spinner({
+  message: `Fetching PRs... (0/${REPOS.length} repos)`,
+});
+spinner.start();
+const pullRequests = await fetchPullRequests(token, {
+  useCache: args.cached,
+  onRepoComplete: () => {
+    reposCompleted++;
+    spinner.message = `Fetching PRs... (${reposCompleted}/${REPOS.length} repos)`;
+  },
+});
+spinner.stop();
 
 // Extract review windows via sync generator, collect into array
 const allWindows: ReviewWindow[] = extractReviewWindows(pullRequests).toArray();

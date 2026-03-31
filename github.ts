@@ -174,51 +174,80 @@ async function graphql(
 }
 
 // ---------------------------------------------------------------------------
-// Async Generator
+// Fetch helpers
 // ---------------------------------------------------------------------------
 
-export async function* fetchPullRequests(
+async function fetchAllPagesForRepo(
   token: string,
-  options: { useCache: boolean } = { useCache: false },
-): AsyncGenerator<PullRequest> {
-  const since = Temporal.Now.instant().subtract({ hours: LOOKBACK_DAYS * 24 });
+  repoName: string,
+  since: Temporal.Instant,
+  useCache: boolean,
+): Promise<PullRequest[]> {
+  const pullRequests: PullRequest[] = [];
+  let cursor: string | null = null;
+  let hasNextPage = true;
 
-  for (const repoName of REPOS) {
-    let cursor: string | null = null;
-    let hasNextPage = true;
+  while (hasNextPage) {
+    const result = await graphql(token, {
+      owner: GITHUB_ORG,
+      name: repoName,
+      cursor,
+    }, useCache);
 
-    while (hasNextPage) {
-      const result = await graphql(token, {
-        owner: GITHUB_ORG,
-        name: repoName,
-        cursor,
-      }, options.useCache);
+    const pullRequestsPage = result.data.repository.pullRequests;
+    const pageInfo = pullRequestsPage.pageInfo;
 
-      const pullRequestsPage = result.data.repository.pullRequests;
-      const pageInfo = pullRequestsPage.pageInfo;
+    let reachedOldPR = false;
 
-      let reachedOldPR = false;
-
-      for (const pullRequest of pullRequestsPage.nodes) {
-        if (pullRequest.isDraft) {
-          continue;
-        }
-
-        const prCreatedAt = Temporal.Instant.from(pullRequest.createdAt);
-        if (Temporal.Instant.compare(prCreatedAt, since) < 0) {
-          reachedOldPR = true;
-          break;
-        }
-
-        yield pullRequest;
+    for (const pullRequest of pullRequestsPage.nodes) {
+      if (pullRequest.isDraft) {
+        continue;
       }
 
-      if (reachedOldPR || !pageInfo.hasNextPage) {
-        hasNextPage = false;
-      } else {
-        cursor = pageInfo.endCursor;
-        hasNextPage = pageInfo.hasNextPage;
+      const prCreatedAt = Temporal.Instant.from(pullRequest.createdAt);
+      if (Temporal.Instant.compare(prCreatedAt, since) < 0) {
+        reachedOldPR = true;
+        break;
       }
+
+      pullRequests.push(pullRequest);
+    }
+
+    if (reachedOldPR || !pageInfo.hasNextPage) {
+      hasNextPage = false;
+    } else {
+      cursor = pageInfo.endCursor;
+      hasNextPage = pageInfo.hasNextPage;
     }
   }
+
+  return pullRequests;
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+export async function fetchPullRequests(
+  token: string,
+  options: { useCache: boolean; onRepoComplete?: () => void } = {
+    useCache: false,
+  },
+): Promise<PullRequest[]> {
+  const since = Temporal.Now.instant().subtract({ hours: LOOKBACK_DAYS * 24 });
+
+  const results = await Promise.all(
+    REPOS.map(async (repoName) => {
+      const pullRequests = await fetchAllPagesForRepo(
+        token,
+        repoName,
+        since,
+        options.useCache,
+      );
+      options.onRepoComplete?.();
+      return pullRequests;
+    }),
+  );
+
+  return results.flat();
 }
