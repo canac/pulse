@@ -10,6 +10,8 @@ export const GITHUB_ORG = "CruGlobal";
 
 export const REPOS = [
   "conf-registration-web",
+  "give-web",
+  "mpdx_api",
   "mpdx-react",
   "staff_accounting_app",
 ] as const;
