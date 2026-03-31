@@ -99,8 +99,8 @@ export function* extractReviewWindows(
       }
     }
 
-    // If window still open after processing all items, yield it as pending
-    if (openWindowStart !== null) {
+    // If window still open and PR is still open, yield as pending (waiting)
+    if (openWindowStart !== null && pullRequest.state === "OPEN") {
       const nowInstant = Temporal.Now.instant();
       yield {
         pr: prInfo,
