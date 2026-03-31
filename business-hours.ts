@@ -154,9 +154,10 @@ export function businessHoursElapsed(
     return 0;
   }
 
-  const startDate = clampedStart.toPlainDate();
-  const endDate = clampedEnd.toPlainDate();
-  const sameDayComparison = Temporal.PlainDate.compare(startDate, endDate);
+  const sameDayComparison = Temporal.PlainDate.compare(
+    clampedStart.toPlainDate(),
+    clampedEnd.toPlainDate(),
+  );
 
   if (sameDayComparison === 0) {
     // Same calendar day: just subtract the hours

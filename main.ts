@@ -129,9 +129,10 @@ const allWindows: ReviewWindow[] = extractReviewWindows(pullRequests).toArray();
 const closedWindows = allWindows.filter((window) =>
   window.respondedAt !== null
 );
-const closedHours = closedWindows.map((window) => window.businessHours);
 
-const overall = computeStats(closedHours);
+const overall = computeStats(
+  closedWindows.map((window) => window.businessHours),
+);
 
 const hoursByReviewer = new Map<string, number[]>();
 for (const window of closedWindows) {

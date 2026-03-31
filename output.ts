@@ -23,16 +23,6 @@ function colorize(hours: number, text: string): string {
   return red(text);
 }
 
-function urgencyEmoji(hours: number): string {
-  if (hours < THRESHOLDS.warning) {
-    return "🟢";
-  }
-  if (hours < THRESHOLDS.overdue) {
-    return "🟡";
-  }
-  return "🔴";
-}
-
 export function printWaiting(windows: ReviewWindow[]): void {
   console.log(bold("\n📋 Waiting for Review\n"));
 
@@ -46,11 +36,15 @@ export function printWaiting(windows: ReviewWindow[]): void {
   }
 
   for (const window of waiting) {
-    const time = formatHours(window.businessHours);
-    const emoji = urgencyEmoji(window.businessHours);
-    const colored = colorize(window.businessHours, `${time} waiting`);
+    const emoji = window.businessHours < THRESHOLDS.warning
+      ? "🟢"
+      : window.businessHours < THRESHOLDS.overdue
+      ? "🟡"
+      : "🔴";
     console.log(
-      `  ${emoji} ${window.pr.url} — "${window.pr.title}" (${colored})`,
+      `  ${emoji} ${window.pr.url} — "${window.pr.title}" (${
+        colorize(window.businessHours, `${formatHours(window.businessHours)} waiting`)
+      })`,
     );
     console.log(`     Opened by @${window.pr.author}`);
   }
@@ -82,13 +76,12 @@ export function printStats(
   if (sorted.length > 0) {
     console.log("  Per reviewer (first responder):");
     for (const [reviewer, stats] of sorted) {
-      const medianStr = colorize(
-        stats.median,
-        `median ${formatHours(stats.median)}`,
-      );
-      const p90Str = colorize(stats.p90, `P90 ${formatHours(stats.p90)}`);
       console.log(
-        `    @${reviewer} — ${medianStr}, ${p90Str} (${stats.count} reviews)`,
+        `    @${reviewer} — ${
+          colorize(stats.median, `median ${formatHours(stats.median)}`)
+        }, ${
+          colorize(stats.p90, `P90 ${formatHours(stats.p90)}`)
+        } (${stats.count} reviews)`,
       );
     }
   }

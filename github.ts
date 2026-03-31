@@ -160,13 +160,14 @@ async function fetchAllPagesForRepo(
       states,
     });
 
-    const result = QueryResponseSchema.parse(json);
-    const pullRequestsPage = result.data.repository.pullRequests;
-    const pageInfo = pullRequestsPage.pageInfo;
+    const { pullRequests: pullRequestsPage } = QueryResponseSchema.parse(json)
+      .data.repository;
 
     let reachedOldPR = false;
     for (const pullRequest of pullRequestsPage.nodes) {
-      if (pullRequest.isDraft) continue;
+      if (pullRequest.isDraft) {
+        continue;
+      }
 
       const prCreatedAt = Temporal.Instant.from(pullRequest.createdAt);
       if (Temporal.Instant.compare(prCreatedAt, since) < 0) {
@@ -177,8 +178,10 @@ async function fetchAllPagesForRepo(
       pullRequests.push({ ...pullRequest, repo: repoName });
     }
 
-    if (reachedOldPR || !pageInfo.hasNextPage) break;
-    cursor = pageInfo.endCursor;
+    if (reachedOldPR || !pullRequestsPage.pageInfo.hasNextPage) {
+      break;
+    }
+    cursor = pullRequestsPage.pageInfo.endCursor;
   }
 
   return pullRequests;
@@ -225,7 +228,9 @@ export async function fetchPullRequestsByNumber(
   repo: string,
   prNumbers: number[],
 ): Promise<Array<PullRequest & { repo: string }>> {
-  if (prNumbers.length === 0) return [];
+  if (prNumbers.length === 0) {
+    return [];
+  }
 
   const prQueries = prNumbers
     .map((num) => `pr_${num}: pullRequest(number: ${num}) { ${PR_FIELDS} }`)
@@ -246,7 +251,9 @@ export async function fetchPullRequestsByNumber(
 
   const data = json as { data?: { repository?: Record<string, unknown> } };
   const repository = data.data?.repository;
-  if (!repository) return [];
+  if (!repository) {
+    return [];
+  }
 
   const pullRequests: Array<PullRequest & { repo: string }> = [];
   for (const num of prNumbers) {
