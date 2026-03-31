@@ -122,7 +122,9 @@ async function graphql(
 ): Promise<z.infer<typeof QueryResponseSchema>> {
   const requestBody = JSON.stringify({ query: PULL_REQUESTS_QUERY, variables });
   // Web Cache API requires a GET-like URL key since POST isn't directly cacheable
-  const cacheKey = `https://api.github.com/graphql?cache=${encodeURIComponent(JSON.stringify(variables))}`;
+  const cacheKey = `https://api.github.com/graphql?cache=${
+    encodeURIComponent(JSON.stringify(variables))
+  }`;
 
   if (useCache) {
     const cache = await caches.open(CACHE_NAME);
@@ -192,8 +194,7 @@ export async function* fetchPullRequests(
         cursor,
       }, options.useCache);
 
-      const pullRequestsPage =
-        result.data.repository.pullRequests;
+      const pullRequestsPage = result.data.repository.pullRequests;
       const pageInfo = pullRequestsPage.pageInfo;
 
       let reachedOldPR = false;

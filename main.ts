@@ -1,6 +1,10 @@
 import "@std/dotenv/load";
 import { fetchPullRequests } from "./github.ts";
-import { computeStats, extractReviewWindows, type ReviewWindow } from "./metrics.ts";
+import {
+  computeStats,
+  extractReviewWindows,
+  type ReviewWindow,
+} from "./metrics.ts";
 import { printStats, printWaiting } from "./output.ts";
 
 import { parseArgs } from "@std/cli/parse-args";
@@ -15,7 +19,9 @@ if (!token) {
 
 // Fetch all PRs via async generator, collect into array
 const pullRequests = [];
-for await (const pullRequest of fetchPullRequests(token, { useCache: args.cached })) {
+for await (
+  const pullRequest of fetchPullRequests(token, { useCache: args.cached })
+) {
   pullRequests.push(pullRequest);
 }
 
@@ -23,7 +29,9 @@ for await (const pullRequest of fetchPullRequests(token, { useCache: args.cached
 const allWindows: ReviewWindow[] = extractReviewWindows(pullRequests).toArray();
 
 // Split into closed (historical) and open (waiting)
-const closedWindows = allWindows.filter((window) => window.respondedAt !== null);
+const closedWindows = allWindows.filter((window) =>
+  window.respondedAt !== null
+);
 const closedHours = closedWindows.map((window) => window.businessHours);
 
 // Overall stats

@@ -41,7 +41,9 @@ export function printWaiting(windows: ReviewWindow[]): void {
     const time = formatHours(window.businessHours);
     const emoji = urgencyEmoji(window.businessHours);
     const colored = colorize(window.businessHours, `${time} waiting`);
-    console.log(`  ${emoji} ${window.pr.url} — "${window.pr.title}" (${colored})`);
+    console.log(
+      `  ${emoji} ${window.pr.url} — "${window.pr.title}" (${colored})`,
+    );
     console.log(`     Opened by @${window.pr.author}`);
   }
   console.log();
@@ -59,7 +61,9 @@ export function printStats(
   }
 
   console.log(
-    `  Overall: median ${formatHours(overall.median)}, P90 ${formatHours(overall.p90)} (${overall.count} reviews)`,
+    `  Overall: median ${formatHours(overall.median)}, P90 ${
+      formatHours(overall.p90)
+    } (${overall.count} reviews)`,
   );
   console.log();
 
@@ -70,9 +74,14 @@ export function printStats(
   if (sorted.length > 0) {
     console.log("  Per reviewer (first responder):");
     for (const [reviewer, stats] of sorted) {
-      const medianStr = colorize(stats.median, `median ${formatHours(stats.median)}`);
+      const medianStr = colorize(
+        stats.median,
+        `median ${formatHours(stats.median)}`,
+      );
       const p90Str = colorize(stats.p90, `P90 ${formatHours(stats.p90)}`);
-      console.log(`    @${reviewer} — ${medianStr}, ${p90Str} (${stats.count} reviews)`);
+      console.log(
+        `    @${reviewer} — ${medianStr}, ${p90Str} (${stats.count} reviews)`,
+      );
     }
   }
   console.log();

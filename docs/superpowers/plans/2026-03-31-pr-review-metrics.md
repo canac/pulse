@@ -1,34 +1,44 @@
 # PR Review Metrics Tracker — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use
+> superpowers:subagent-driven-development (recommended) or
+> superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a Deno CLI tool that fetches PR timeline data from GitHub GraphQL, computes review response times in business hours, and prints a colored summary.
+**Goal:** Build a Deno CLI tool that fetches PR timeline data from GitHub
+GraphQL, computes review response times in business hours, and prints a colored
+summary.
 
-**Architecture:** Generator-based pipeline — async generator yields PRs from GitHub API, sync generator extracts review windows, then stats are aggregated and printed. Business hours calculator uses Temporal API for timezone-aware weekday-only counting.
+**Architecture:** Generator-based pipeline — async generator yields PRs from
+GitHub API, sync generator extracts review windows, then stats are aggregated
+and printed. Business hours calculator uses Temporal API for timezone-aware
+weekday-only counting.
 
-**Tech Stack:** Deno, TypeScript, Zod, Temporal API, `@std/fmt/colors`, `@std/testing`, `@std/assert`
+**Tech Stack:** Deno, TypeScript, Zod, Temporal API, `@std/fmt/colors`,
+`@std/testing`, `@std/assert`
 
 ---
 
 ## File Structure
 
-| File | Responsibility |
-|------|---------------|
-| `deno.json` | Import map, tasks |
-| `config.ts` | Hardcoded team members, repos, business hours constants, review time thresholds |
-| `github.ts` | GraphQL client, Zod schemas, async generator yielding PRs |
-| `business-hours.ts` | Calculate elapsed business hours between two instants |
-| `business-hours_test.ts` | Tests for business hours edge cases |
-| `metrics.ts` | Extract review windows (generator), compute median/P90 |
-| `metrics_test.ts` | Tests for window extraction and stat computation |
-| `output.ts` | Format and print colored CLI output |
-| `main.ts` | Entry point — wire the pipeline together |
+| File                     | Responsibility                                                                  |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| `deno.json`              | Import map, tasks                                                               |
+| `config.ts`              | Hardcoded team members, repos, business hours constants, review time thresholds |
+| `github.ts`              | GraphQL client, Zod schemas, async generator yielding PRs                       |
+| `business-hours.ts`      | Calculate elapsed business hours between two instants                           |
+| `business-hours_test.ts` | Tests for business hours edge cases                                             |
+| `metrics.ts`             | Extract review windows (generator), compute median/P90                          |
+| `metrics_test.ts`        | Tests for window extraction and stat computation                                |
+| `output.ts`              | Format and print colored CLI output                                             |
+| `main.ts`                | Entry point — wire the pipeline together                                        |
 
 ---
 
 ### Task 1: Project Setup
 
 **Files:**
+
 - Create: `deno.json`
 - Create: `config.ts`
 
@@ -84,8 +94,7 @@ export const THRESHOLDS = {
 
 - [ ] **Step 3: Verify setup**
 
-Run: `deno check config.ts`
-Expected: No errors.
+Run: `deno check config.ts` Expected: No errors.
 
 - [ ] **Step 4: Commit**
 
@@ -99,6 +108,7 @@ git commit -m "feat: project setup with deno.json and config"
 ### Task 2: Business Hours Calculator — Tests
 
 **Files:**
+
 - Create: `business-hours.ts` (stub)
 - Create: `business-hours_test.ts`
 
@@ -217,8 +227,8 @@ describe("businessHoursElapsed", () => {
 
 - [ ] **Step 3: Run tests to verify they fail**
 
-Run: `deno test business-hours_test.ts`
-Expected: All tests FAIL with "Not implemented".
+Run: `deno test business-hours_test.ts` Expected: All tests FAIL with "Not
+implemented".
 
 - [ ] **Step 4: Commit**
 
@@ -232,6 +242,7 @@ git commit -m "test: add business hours calculator tests (red)"
 ### Task 3: Business Hours Calculator — Implementation
 
 **Files:**
+
 - Modify: `business-hours.ts`
 
 - [ ] **Step 1: Implement `businessHoursElapsed`**
@@ -341,8 +352,7 @@ export function businessHoursElapsed(
 
 - [ ] **Step 2: Run tests**
 
-Run: `deno test business-hours_test.ts`
-Expected: All tests PASS.
+Run: `deno test business-hours_test.ts` Expected: All tests PASS.
 
 - [ ] **Step 3: Commit**
 
@@ -356,6 +366,7 @@ git commit -m "feat: implement business hours calculator"
 ### Task 4: GitHub API — Zod Schemas and Client
 
 **Files:**
+
 - Create: `github.ts`
 
 - [ ] **Step 1: Create `github.ts` with Zod schemas and async generator**
@@ -545,8 +556,7 @@ export async function* fetchPullRequests(
 
 - [ ] **Step 2: Type-check**
 
-Run: `deno check github.ts`
-Expected: No errors.
+Run: `deno check github.ts` Expected: No errors.
 
 - [ ] **Step 3: Commit**
 
@@ -560,6 +570,7 @@ git commit -m "feat: GitHub GraphQL client with Zod schemas and async generator"
 ### Task 5: Metrics — Tests
 
 **Files:**
+
 - Create: `metrics.ts` (stub)
 - Create: `metrics_test.ts`
 
@@ -827,8 +838,8 @@ describe("computeStats", () => {
 
 - [ ] **Step 3: Run tests to verify they fail**
 
-Run: `deno test metrics_test.ts`
-Expected: All tests FAIL with "Not implemented".
+Run: `deno test metrics_test.ts` Expected: All tests FAIL with "Not
+implemented".
 
 - [ ] **Step 4: Commit**
 
@@ -842,6 +853,7 @@ git commit -m "test: add metrics extraction and stats tests (red)"
 ### Task 6: Metrics — Implementation
 
 **Files:**
+
 - Modify: `metrics.ts`
 
 - [ ] **Step 1: Implement `metrics.ts`**
@@ -956,8 +968,7 @@ export function computeStats(values: number[]): Stats {
 
 - [ ] **Step 2: Run tests**
 
-Run: `deno test metrics_test.ts`
-Expected: All tests PASS.
+Run: `deno test metrics_test.ts` Expected: All tests PASS.
 
 - [ ] **Step 3: Commit**
 
@@ -971,6 +982,7 @@ git commit -m "feat: implement review window extraction and stats computation"
 ### Task 7: Output Formatting
 
 **Files:**
+
 - Create: `output.ts`
 
 - [ ] **Step 1: Create `output.ts`**
@@ -1037,7 +1049,9 @@ export function printStats(
   }
 
   console.log(
-    `  Overall: median ${formatHours(overall.median)}, P90 ${formatHours(overall.p90)} (${overall.count} reviews)`,
+    `  Overall: median ${formatHours(overall.median)}, P90 ${
+      formatHours(overall.p90)
+    } (${overall.count} reviews)`,
   );
   console.log();
 
@@ -1065,8 +1079,7 @@ export function printStats(
 
 - [ ] **Step 2: Type-check**
 
-Run: `deno check output.ts`
-Expected: No errors.
+Run: `deno check output.ts` Expected: No errors.
 
 - [ ] **Step 3: Commit**
 
@@ -1080,13 +1093,18 @@ git commit -m "feat: add colored CLI output formatting"
 ### Task 8: Main Entry Point
 
 **Files:**
+
 - Create: `main.ts`
 
 - [ ] **Step 1: Create `main.ts`**
 
 ```typescript
 import { fetchPullRequests } from "./github.ts";
-import { computeStats, extractReviewWindows, type ReviewWindow } from "./metrics.ts";
+import {
+  computeStats,
+  extractReviewWindows,
+  type ReviewWindow,
+} from "./metrics.ts";
 import { printStats, printWaiting } from "./output.ts";
 
 const token = Deno.env.get("GITHUB_TOKEN");
@@ -1135,8 +1153,7 @@ printStats(overall, perReviewerStats);
 
 - [ ] **Step 2: Type-check**
 
-Run: `deno check main.ts`
-Expected: No errors.
+Run: `deno check main.ts` Expected: No errors.
 
 - [ ] **Step 3: Commit**
 
@@ -1151,18 +1168,19 @@ git commit -m "feat: add main entry point wiring the pipeline together"
 
 - [ ] **Step 1: Run all unit tests**
 
-Run: `deno test`
-Expected: All tests pass.
+Run: `deno test` Expected: All tests pass.
 
 - [ ] **Step 2: Run the tool against real repos**
 
 Run: `GITHUB_TOKEN=<token> deno run --allow-net --allow-env main.ts`
 
-Expected: Colored output showing waiting PRs and historical stats. If no PRs are found, the output should still print headers with "no data" messages.
+Expected: Colored output showing waiting PRs and historical stats. If no PRs are
+found, the output should still print headers with "no data" messages.
 
 - [ ] **Step 3: Update config with real values**
 
-Edit `config.ts` to add actual team members and repos. Re-run to verify with real data.
+Edit `config.ts` to add actual team members and repos. Re-run to verify with
+real data.
 
 - [ ] **Step 4: Commit final config**
 

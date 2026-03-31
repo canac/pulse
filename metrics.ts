@@ -47,11 +47,13 @@ export function* extractReviewWindows(
     };
 
     // Sort timeline items by createdAt ascending
-    const sortedItems = [...pullRequest.timelineItems.nodes].sort((itemA, itemB) => {
-      const instantA = Temporal.Instant.from(itemA.createdAt);
-      const instantB = Temporal.Instant.from(itemB.createdAt);
-      return Temporal.Instant.compare(instantA, instantB);
-    });
+    const sortedItems = [...pullRequest.timelineItems.nodes].sort(
+      (itemA, itemB) => {
+        const instantA = Temporal.Instant.from(itemA.createdAt);
+        const instantB = Temporal.Instant.from(itemB.createdAt);
+        return Temporal.Instant.compare(instantA, instantB);
+      },
+    );
 
     let openWindowStart: Temporal.Instant | null = null;
 

@@ -2,17 +2,23 @@
 
 ## Context
 
-Our team needs visibility into PR review responsiveness — both real-time ("what's waiting?") and historical ("how fast are we?"). Think of a fast food order board: you can see what's been waiting and for how long. This tool provides that for code reviews.
+Our team needs visibility into PR review responsiveness — both real-time
+("what's waiting?") and historical ("how fast are we?"). Think of a fast food
+order board: you can see what's been waiting and for how long. This tool
+provides that for code reviews.
 
 ## Overview
 
-A Deno CLI tool that fetches PR data from GitHub's GraphQL API, computes review response time metrics using business-hours-only counting, and prints a colored summary to the terminal.
+A Deno CLI tool that fetches PR data from GitHub's GraphQL API, computes review
+response time metrics using business-hours-only counting, and prints a colored
+summary to the terminal.
 
 **Run once, print stats, exit.** No subcommands, no server, no persistence.
 
 ## Architecture: Generator Pipeline
 
-The data flows through a generator-based pipeline, keeping memory usage low and enabling composable processing:
+The data flows through a generator-based pipeline, keeping memory usage low and
+enabling composable processing:
 
 ```
 fetchPRs(repo) ──yield──> PR with timeline items
@@ -24,9 +30,14 @@ extractReviewWindows(prs) ──yield──> ReviewWindow per PR
 collect & compute stats ──> output
 ```
 
-- **`github.ts`** exports an `async generator` that yields validated PR objects (with timeline items) across all repos, handling pagination internally. Consumers iterate with `for await`.
-- **`metrics.ts`** exports a generator that consumes PR objects and yields `ReviewWindow` objects (both closed and open/waiting). The deduplication and window-opening/closing logic operates per-PR as items are yielded.
-- **`main.ts`** collects the yielded review windows into arrays for final aggregation (medians/P90 require all data), then passes to output.
+- **`github.ts`** exports an `async generator` that yields validated PR objects
+  (with timeline items) across all repos, handling pagination internally.
+  Consumers iterate with `for await`.
+- **`metrics.ts`** exports a generator that consumes PR objects and yields
+  `ReviewWindow` objects (both closed and open/waiting). The deduplication and
+  window-opening/closing logic operates per-PR as items are yielded.
+- **`main.ts`** collects the yielded review windows into arrays for final
+  aggregation (medians/P90 require all data), then passes to output.
 
 ## Project Structure
 
@@ -57,7 +68,8 @@ Exports hardcoded constants:
 
 - `TEAM_MEMBERS: string[]` — GitHub usernames of team members
 - `REPOS: { owner: string; name: string }[]` — repositories to track
-- `BUSINESS_HOURS: { start: 10, end: 16, tz: "America/New_York" }` — 10am–4pm Eastern
+- `BUSINESS_HOURS: { start: 10, end: 16, tz: "America/New_York" }` — 10am–4pm
+  Eastern
 - `LOOKBACK_DAYS: 30` — how far back to analyze
 
 ## Authentication
@@ -70,18 +82,22 @@ Exports hardcoded constants:
 
 ### Query Strategy
 
-One GraphQL query per repo fetching non-draft PRs with timeline items. Paginate PRs (100 per page) and stop when we hit PRs older than 30 days.
+One GraphQL query per repo fetching non-draft PRs with timeline items. Paginate
+PRs (100 per page) and stop when we hit PRs older than 30 days.
 
 ### Generator Interface
 
 ```typescript
 async function* fetchPullRequests(
   repos: { owner: string; name: string }[],
-  since: Temporal.Instant
-): AsyncGenerator<PullRequest>
+  since: Temporal.Instant,
+): AsyncGenerator<PullRequest>;
 ```
 
-Iterates through all repos and pages, validates each response with Zod, filters out drafts and old PRs, and yields one `PullRequest` at a time. Pagination cursors are managed internally — callers just `for await (const pr of fetchPullRequests(repos, since))`.
+Iterates through all repos and pages, validates each response with Zod, filters
+out drafts and old PRs, and yields one `PullRequest` at a time. Pagination
+cursors are managed internally — callers just
+`for await (const pr of fetchPullRequests(repos, since))`.
 
 ### GraphQL Query
 
@@ -128,16 +144,20 @@ query($owner: String!, $name: String!, $cursor: String) {
 ### Zod Schemas
 
 Define schemas for:
-- Each timeline item type (`ReviewRequestedEvent`, `PullRequestReview`, `IssueComment`)
+
+- Each timeline item type (`ReviewRequestedEvent`, `PullRequestReview`,
+  `IssueComment`)
 - The discriminated union of timeline items (using `__typename`)
 - The PR node shape
 - The full query response
 
-These schemas validate the API response and provide TypeScript types via `z.infer<>`.
+These schemas validate the API response and provide TypeScript types via
+`z.infer<>`.
 
 ### Filtering
 
 After fetching:
+
 - Exclude draft PRs (`isDraft: true`)
 - Exclude PRs created before the 30-day lookback window
 - Stop paginating once all remaining PRs are older than the window
@@ -147,10 +167,14 @@ After fetching:
 ### Core Function
 
 ```typescript
-function businessHoursElapsed(start: Temporal.Instant, end: Temporal.Instant): number
+function businessHoursElapsed(
+  start: Temporal.Instant,
+  end: Temporal.Instant,
+): number;
 ```
 
-Returns elapsed hours counting only weekdays 10am–4pm Eastern (6 business hours per day).
+Returns elapsed hours counting only weekdays 10am–4pm Eastern (6 business hours
+per day).
 
 ### Algorithm
 
@@ -159,10 +183,12 @@ Returns elapsed hours counting only weekdays 10am–4pm Eastern (6 business hour
    - Before 10am same day → 10am
    - After 4pm same day → 10am next business day
    - Weekend → 10am Monday
-3. Clamp `end` similarly (but backward — if before 10am, use 4pm previous business day)
+3. Clamp `end` similarly (but backward — if before 10am, use 4pm previous
+   business day)
 4. Walk day-by-day:
    - Same business day: simple subtraction in hours
-   - Different days: partial hours on start day + (full business days between × 6) + partial hours on end day
+   - Different days: partial hours on start day + (full business days between
+     × 6) + partial hours on end day
 5. Return total as a decimal number of hours
 
 ### Edge Cases
@@ -180,43 +206,54 @@ Returns elapsed hours counting only weekdays 10am–4pm Eastern (6 business hour
 
 ```typescript
 function* extractReviewWindows(
-  prs: Iterable<PullRequest>
-): Generator<ReviewWindow>
+  prs: Iterable<PullRequest>,
+): Generator<ReviewWindow>;
 ```
 
 Consumes PR objects and yields `ReviewWindow` objects. For each PR:
 
 1. Sort timeline events by `createdAt`
-2. A window **opens** at the earliest `ReviewRequestedEvent` in a cluster. Multiple review requests before any response are de-duplicated into one window start.
-3. A window **closes** at the first `PullRequestReview` or `IssueComment` from a team member who is not the PR author.
-4. If new `ReviewRequestedEvent`s appear after a window closes, a new window opens.
-5. An open PR with an unclosed window is "waiting for review" — yielded as an open window.
+2. A window **opens** at the earliest `ReviewRequestedEvent` in a cluster.
+   Multiple review requests before any response are de-duplicated into one
+   window start.
+3. A window **closes** at the first `PullRequestReview` or `IssueComment` from a
+   team member who is not the PR author.
+4. If new `ReviewRequestedEvent`s appear after a window closes, a new window
+   opens.
+5. An open PR with an unclosed window is "waiting for review" — yielded as an
+   open window.
 
 Each window is yielded as it's computed (one PR at a time). Window shape:
 
 - `pr: { number, title, url, repo, author }` — PR metadata
 - `requestedAt: Temporal.Instant`
 - `respondedAt: Temporal.Instant | null` — null if still waiting
-- `respondedBy: string | null` — GitHub username of first responder, null if waiting
+- `respondedBy: string | null` — GitHub username of first responder, null if
+  waiting
 - `businessHours: number` — elapsed business hours (to now if still waiting)
 
 ### Aggregate Stats
 
 **Overall team stats:**
+
 - Median business hours across all closed review windows
 - P90 (90th percentile) business hours
 
 **Per first-responder stats:**
-- For each team member: median, P90, and count of windows where they were the first responder
+
+- For each team member: median, P90, and count of windows where they were the
+  first responder
 - Only includes team members who have at least one first response
 
 **Waiting PRs:**
+
 - Open PRs with an unclosed review window
 - Current wait time in business hours (from window open to now)
 
 ### Median/P90 Calculation
 
 Simple array-based:
+
 - Sort values ascending
 - Median: value at index `floor(length / 2)` (or average of two middle values)
 - P90: value at index `floor(length * 0.9)`
@@ -239,6 +276,7 @@ Sorted by longest wait first. Each entry as a list item:
 ```
 
 Color thresholds:
+
 - 🟢 Green: < 4 business hours
 - 🟡 Yellow: 4–6 business hours
 - 🔴 Red: > 6 business hours
@@ -247,7 +285,8 @@ If nothing waiting: `No PRs waiting for review! 🎉`
 
 ### Section 2: "Review Response Times (Last 30 Days)"
 
-Overall team stats, then per-reviewer breakdown sorted by median (slowest first):
+Overall team stats, then per-reviewer breakdown sorted by median (slowest
+first):
 
 ```
 Overall: median 2.1h, P90 5.8h (42 reviews)
@@ -265,7 +304,8 @@ Per reviewer (first responder):
 
 ## Testing
 
-Uses `@std/testing` (BDD-style `describe`/`it`) and `@std/assert`. Run with `deno test`.
+Uses `@std/testing` (BDD-style `describe`/`it`) and `@std/assert`. Run with
+`deno test`.
 
 ### `business-hours_test.ts`
 
@@ -282,7 +322,8 @@ Uses `@std/testing` (BDD-style `describe`/`it`) and `@std/assert`. Run with `den
 
 ### `metrics_test.ts`
 
-- Single PR, single review request, single review → one closed window with correct timing
+- Single PR, single review request, single review → one closed window with
+  correct timing
 - Multiple review requests before response → de-duplicated to one window
 - Multiple review cycles (request → review → re-request → review) → two windows
 - Comment from team member counts as review response
@@ -298,4 +339,5 @@ Uses `@std/testing` (BDD-style `describe`/`it`) and `@std/assert`. Run with `den
 3. Verify it fetches PRs from configured repos
 4. Verify waiting PRs are listed with correct business-hours wait times
 5. Verify historical stats show median/P90 per reviewer
-6. Manually check a few PRs against GitHub UI to confirm timeline event parsing is correct
+6. Manually check a few PRs against GitHub UI to confirm timeline event parsing
+   is correct
