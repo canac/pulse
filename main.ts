@@ -1,4 +1,4 @@
-import "@std/dotenv/load";
+import { load } from "@std/dotenv";
 import { fetchPullRequests } from "./github.ts";
 import {
   computeStats,
@@ -11,9 +11,10 @@ import { parseArgs } from "@std/cli/parse-args";
 
 const args = parseArgs(Deno.args, { boolean: ["cached"] });
 
-const token = Deno.env.get("GITHUB_TOKEN");
+const env = await load();
+const token = env.GITHUB_TOKEN;
 if (!token) {
-  console.error("Error: GITHUB_TOKEN environment variable is required.");
+  console.error("Error: GITHUB_TOKEN must be set in .env file.");
   Deno.exit(1);
 }
 
