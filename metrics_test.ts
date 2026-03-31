@@ -47,7 +47,7 @@ describe("extractReviewWindows", () => {
       ],
     });
 
-    const windows = [...extractReviewWindows([pullRequest])];
+    const windows = extractReviewWindows([pullRequest]).toArray();
 
     assertEquals(windows.length, 1);
     assertEquals(
@@ -89,7 +89,7 @@ describe("extractReviewWindows", () => {
       ],
     });
 
-    const windows = [...extractReviewWindows([pullRequest])];
+    const windows = extractReviewWindows([pullRequest]).toArray();
 
     // Should produce exactly one window starting at the first request
     assertEquals(windows.length, 1);
@@ -129,7 +129,7 @@ describe("extractReviewWindows", () => {
       ],
     });
 
-    const windows = [...extractReviewWindows([pullRequest])];
+    const windows = extractReviewWindows([pullRequest]).toArray();
 
     assertEquals(windows.length, 2);
     assertEquals(windows[0].respondedBy, "canac");
@@ -157,7 +157,7 @@ describe("extractReviewWindows", () => {
       ],
     });
 
-    const windows = [...extractReviewWindows([pullRequest])];
+    const windows = extractReviewWindows([pullRequest]).toArray();
 
     assertEquals(windows.length, 1);
     assertEquals(windows[0].respondedBy, "zweatshirt");
@@ -185,7 +185,7 @@ describe("extractReviewWindows", () => {
       ],
     });
 
-    const windows = [...extractReviewWindows([pullRequest])];
+    const windows = extractReviewWindows([pullRequest]).toArray();
 
     // Window should still be open (respondedAt: null) since author's comment doesn't count
     assertEquals(windows.length, 1);
@@ -211,7 +211,7 @@ describe("extractReviewWindows", () => {
       ],
     });
 
-    const windows = [...extractReviewWindows([pullRequest])];
+    const windows = extractReviewWindows([pullRequest]).toArray();
 
     // Window should still be open
     assertEquals(windows.length, 1);
@@ -231,7 +231,7 @@ describe("extractReviewWindows", () => {
       ],
     });
 
-    const windows = [...extractReviewWindows([pullRequest])];
+    const windows = extractReviewWindows([pullRequest]).toArray();
     assertEquals(windows.length, 0);
   });
 
@@ -247,7 +247,7 @@ describe("extractReviewWindows", () => {
       ],
     });
 
-    const windows = [...extractReviewWindows([pullRequest])];
+    const windows = extractReviewWindows([pullRequest]).toArray();
 
     assertEquals(windows.length, 1);
     assertEquals(windows[0].respondedAt, null);

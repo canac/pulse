@@ -16,7 +16,7 @@ for await (const pullRequest of fetchPullRequests(token)) {
 }
 
 // Extract review windows via sync generator, collect into array
-const allWindows: ReviewWindow[] = [...extractReviewWindows(pullRequests)];
+const allWindows: ReviewWindow[] = extractReviewWindows(pullRequests).toArray();
 
 // Split into closed (historical) and open (waiting)
 const closedWindows = allWindows.filter((window) => window.respondedAt !== null);
