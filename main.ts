@@ -3,6 +3,10 @@ import { fetchPullRequests } from "./github.ts";
 import { computeStats, extractReviewWindows, type ReviewWindow } from "./metrics.ts";
 import { printStats, printWaiting } from "./output.ts";
 
+import { parseArgs } from "@std/cli/parse-args";
+
+const args = parseArgs(Deno.args, { boolean: ["cached"] });
+
 const token = Deno.env.get("GITHUB_TOKEN");
 if (!token) {
   console.error("Error: GITHUB_TOKEN environment variable is required.");
@@ -11,7 +15,7 @@ if (!token) {
 
 // Fetch all PRs via async generator, collect into array
 const pullRequests = [];
-for await (const pullRequest of fetchPullRequests(token)) {
+for await (const pullRequest of fetchPullRequests(token, { useCache: args.cached })) {
   pullRequests.push(pullRequest);
 }
 

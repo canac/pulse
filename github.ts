@@ -112,17 +112,37 @@ const PULL_REQUESTS_QUERY = `
 // GraphQL helper
 // ---------------------------------------------------------------------------
 
+const CACHE_NAME = "github-graphql";
+const CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
+
 async function graphql(
   token: string,
   variables: Record<string, unknown>,
+  useCache: boolean,
 ): Promise<z.infer<typeof QueryResponseSchema>> {
+  const requestBody = JSON.stringify({ query: PULL_REQUESTS_QUERY, variables });
+  // Web Cache API requires a GET-like URL key since POST isn't directly cacheable
+  const cacheKey = `https://api.github.com/graphql?cache=${encodeURIComponent(JSON.stringify(variables))}`;
+
+  if (useCache) {
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(cacheKey);
+    if (cached) {
+      const cachedAt = cached.headers.get("x-cached-at");
+      if (cachedAt && Date.now() - Number(cachedAt) < CACHE_MAX_AGE_MS) {
+        const json = await cached.json();
+        return QueryResponseSchema.parse(json);
+      }
+    }
+  }
+
   const response = await fetch("https://api.github.com/graphql", {
     method: "POST",
     headers: {
       "Authorization": `bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ query: PULL_REQUESTS_QUERY, variables }),
+    body: requestBody,
   });
 
   if (!response.ok) {
@@ -140,6 +160,14 @@ async function graphql(
     throw new Error(`GitHub GraphQL errors: ${errorMessages}`);
   }
 
+  if (useCache) {
+    const cache = await caches.open(CACHE_NAME);
+    const cacheResponse = new Response(JSON.stringify(json), {
+      headers: { "x-cached-at": String(Date.now()) },
+    });
+    await cache.put(cacheKey, cacheResponse);
+  }
+
   return QueryResponseSchema.parse(json);
 }
 
@@ -149,6 +177,7 @@ async function graphql(
 
 export async function* fetchPullRequests(
   token: string,
+  options: { useCache: boolean } = { useCache: false },
 ): AsyncGenerator<PullRequest> {
   const since = Temporal.Now.instant().subtract({ hours: LOOKBACK_DAYS * 24 });
 
@@ -161,7 +190,7 @@ export async function* fetchPullRequests(
         owner: GITHUB_ORG,
         name: repoName,
         cursor,
-      });
+      }, options.useCache);
 
       const pullRequestsPage =
         result.data.repository.pullRequests;
