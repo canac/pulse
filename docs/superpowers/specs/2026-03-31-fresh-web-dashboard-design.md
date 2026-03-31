@@ -46,6 +46,10 @@ review-dashboard/
 
 `main.ts` gains a `serve` subcommand. `deno task start` runs the CLI as today. `deno task start serve` (or a new `deno task serve`) starts the Fresh web server. The serve path imports `serve.ts` which calls Fresh's app startup.
 
+### Port Configuration
+
+The server port is read from the `PORT` environment variable. If omitted, pass `port: undefined` to Fresh (which lets the framework pick a default).
+
 ### Reused Modules
 
 All existing modules are imported directly by the route handlers — no API layer:
