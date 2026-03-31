@@ -10,6 +10,24 @@ A Deno CLI tool that fetches PR data from GitHub's GraphQL API, computes review 
 
 **Run once, print stats, exit.** No subcommands, no server, no persistence.
 
+## Architecture: Generator Pipeline
+
+The data flows through a generator-based pipeline, keeping memory usage low and enabling composable processing:
+
+```
+fetchPRs(repo) ──yield──> PR with timeline items
+       │
+       ▼
+extractReviewWindows(prs) ──yield──> ReviewWindow per PR
+       │
+       ▼
+collect & compute stats ──> output
+```
+
+- **`github.ts`** exports an `async generator` that yields validated PR objects (with timeline items) across all repos, handling pagination internally. Consumers iterate with `for await`.
+- **`metrics.ts`** exports a generator that consumes PR objects and yields `ReviewWindow` objects (both closed and open/waiting). The deduplication and window-opening/closing logic operates per-PR as items are yielded.
+- **`main.ts`** collects the yielded review windows into arrays for final aggregation (medians/P90 require all data), then passes to output.
+
 ## Project Structure
 
 ```
@@ -49,6 +67,17 @@ Exports hardcoded constants:
 ### Query Strategy
 
 One GraphQL query per repo fetching non-draft PRs with timeline items. Paginate PRs (100 per page) and stop when we hit PRs older than 30 days.
+
+### Generator Interface
+
+```typescript
+async function* fetchPullRequests(
+  repos: { owner: string; name: string }[],
+  since: Temporal.Instant
+): AsyncGenerator<PullRequest>
+```
+
+Iterates through all repos and pages, validates each response with Zod, filters out drafts and old PRs, and yields one `PullRequest` at a time. Pagination cursors are managed internally — callers just `for await (const pr of fetchPullRequests(repos, since))`.
 
 ### GraphQL Query
 
@@ -143,19 +172,29 @@ Returns elapsed hours counting only weekdays 10am–4pm Eastern (6 business hour
 
 ### Review Windows
 
-For each PR, extract "review windows" from the timeline:
+#### Generator Interface
 
-1. Sort all timeline events by `createdAt`
+```typescript
+function* extractReviewWindows(
+  prs: Iterable<PullRequest>
+): Generator<ReviewWindow>
+```
+
+Consumes PR objects and yields `ReviewWindow` objects. For each PR:
+
+1. Sort timeline events by `createdAt`
 2. A window **opens** at the earliest `ReviewRequestedEvent` in a cluster. Multiple review requests before any response are de-duplicated into one window start.
 3. A window **closes** at the first `PullRequestReview` or `IssueComment` from a team member who is not the PR author.
 4. If new `ReviewRequestedEvent`s appear after a window closes, a new window opens.
-5. An open PR with an unclosed window is "waiting for review."
+5. An open PR with an unclosed window is "waiting for review" — yielded as an open window.
 
-Each closed window records:
+Each window is yielded as it's computed (one PR at a time). Window shape:
+
+- `pr: { number, title, url, repo, author }` — PR metadata
 - `requestedAt: Temporal.Instant`
-- `respondedAt: Temporal.Instant`
-- `respondedBy: string` (GitHub username of first responder)
-- `businessHours: number` (elapsed business hours)
+- `respondedAt: Temporal.Instant | null` — null if still waiting
+- `respondedBy: string | null` — GitHub username of first responder, null if waiting
+- `businessHours: number` — elapsed business hours (to now if still waiting)
 
 ### Aggregate Stats
 
