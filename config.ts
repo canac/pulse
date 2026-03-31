@@ -15,8 +15,8 @@ export const REPOS = [
 ] as const;
 
 export const BUSINESS_HOURS = {
-  start: 10,
-  end: 16,
+  start: 9,
+  end: 17,
   tz: "America/New_York",
 } as const;
 
@@ -26,6 +26,6 @@ export const LOOKBACK_DAYS = 30;
 export const THRESHOLDS = {
   /** 4+ business hours — needs attention */
   warning: 4,
-  /** 6+ business hours — overdue */
-  overdue: 6,
+  /** 8+ business hours — overdue */
+  overdue: 8,
 } as const;
