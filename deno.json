@@ -9,9 +9,9 @@
     "hono": "jsr:@hono/hono@^4"
   },
   "tasks": {
-    "start": "deno run --allow-read=.env,cache.json --allow-write=cache.json --allow-net=api.github.com main.ts",
-    "dev": "deno run --watch --allow-read --allow-write=cache.json --allow-net --allow-env main.ts serve",
-    "serve": "deno run --allow-read --allow-write=cache.json --allow-net --allow-env main.ts serve",
+    "start": "deno run --allow-read=.env --allow-net=api.github.com main.ts",
+    "dev": "deno run --watch --allow-read --allow-net --allow-env main.ts serve",
+    "serve": "deno run --allow-read --allow-net --allow-env main.ts serve",
     "test": "deno test --allow-read --allow-write"
   },
   "compilerOptions": {

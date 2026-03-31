@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { CACHE_PATH, getToken, LOOKBACK_DAYS } from "./config.ts";
-import { cacheKey, loadCache, saveCache } from "./cache.ts";
+import { getToken, LOOKBACK_DAYS } from "./config.ts";
+import { cacheKey, loadCache, loadCacheUpdatedAt, saveCache } from "./cache.ts";
 import { fetchPullRequests, fetchPullRequestsByNumber } from "./github.ts";
 import {
   computeStats,
@@ -21,7 +21,7 @@ let lastFetchedAt = 0;
 async function backgroundRefresh(): Promise<void> {
   try {
     const token = await getToken();
-    const cache = await loadCache(CACHE_PATH);
+    const cache = await loadCache();
 
     if (cache.size === 0) {
       const freshPRs = await fetchPullRequests(token);
@@ -70,7 +70,7 @@ async function backgroundRefresh(): Promise<void> {
       }
     }
 
-    await saveCache(CACHE_PATH, cache);
+    await saveCache(cache);
     console.log("Background refresh complete");
   } catch (error) {
     console.error("Background refresh failed:", error);
@@ -88,7 +88,7 @@ async function loadWindowsAndMeta(): Promise<{
   allWindows: ReviewWindow[];
   lastUpdated: Date | null;
 }> {
-  const cache = await loadCache(CACHE_PATH);
+  const cache = await loadCache();
   const since = Temporal.Now.instant().subtract({
     hours: LOOKBACK_DAYS * 24,
   });
@@ -98,11 +98,11 @@ async function loadWindowsAndMeta(): Promise<{
   });
 
   const allWindows = extractReviewWindows(pullRequests).toArray();
-  const cacheStats = await Deno.stat(CACHE_PATH).catch(() => null);
+  const lastUpdated = await loadCacheUpdatedAt();
 
   return {
     allWindows,
-    lastUpdated: cacheStats?.mtime ?? null,
+    lastUpdated,
   };
 }
 

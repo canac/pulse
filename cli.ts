@@ -1,5 +1,5 @@
 import { Spinner } from "@std/cli/unstable-spinner";
-import { CACHE_PATH, getToken, LOOKBACK_DAYS, REPOS } from "./config.ts";
+import { getToken, LOOKBACK_DAYS, REPOS } from "./config.ts";
 import { fetchPullRequests, fetchPullRequestsByNumber } from "./github.ts";
 import {
   computeStats,
@@ -13,7 +13,7 @@ export async function runCli(options: { cached: boolean }): Promise<void> {
   const token = await getToken();
 
   // Step 1: Load cache
-  const cache = await loadCache(CACHE_PATH);
+  const cache = await loadCache();
 
   // Step 2: Fetch from GitHub (unless --cached)
   if (!options.cached) {
@@ -106,7 +106,7 @@ export async function runCli(options: { cached: boolean }): Promise<void> {
     }
 
     // Step 3: Save cache
-    await saveCache(CACHE_PATH, cache);
+    await saveCache(cache);
   }
 
   // Step 4: Filter to lookback window and run pipeline

@@ -1,9 +1,10 @@
-import { describe, it } from "@std/testing/bdd";
+import { afterEach, describe, it } from "@std/testing/bdd";
 import { assertEquals } from "@std/assert";
 import {
   type CachedPullRequest,
   cacheKey,
   loadCache,
+  loadCacheUpdatedAt,
   saveCache,
 } from "./cache.ts";
 
@@ -24,6 +25,10 @@ function makeCachedPR(
   };
 }
 
+afterEach(async () => {
+  await caches.delete("pulse");
+});
+
 describe("cacheKey", () => {
   it("formats as repo#number", () => {
     assertEquals(cacheKey("mpdx-react", 123), "mpdx-react#123");
@@ -31,36 +36,26 @@ describe("cacheKey", () => {
 });
 
 describe("loadCache", () => {
-  it("returns empty map for nonexistent file", async () => {
-    const cache = await loadCache("/tmp/nonexistent-review-cache.json");
+  it("returns empty map when cache does not exist", async () => {
+    const cache = await loadCache();
     assertEquals(cache.size, 0);
   });
 
-  it("returns empty map for malformed JSON", async () => {
-    const path = await Deno.makeTempFile();
-    await Deno.writeTextFile(path, "not valid json {{{");
-    const cache = await loadCache(path);
-    assertEquals(cache.size, 0);
-    await Deno.remove(path);
-  });
+  it("loads saved cache and keys by repo#number", async () => {
+    const original = new Map<string, CachedPullRequest>();
+    original.set("mpdx-react#42", makeCachedPR("mpdx-react", 42));
+    await saveCache(original);
 
-  it("loads valid cache and keys by repo#number", async () => {
-    const path = await Deno.makeTempFile();
-    const data = [makeCachedPR("mpdx-react", 42)];
-    await Deno.writeTextFile(path, JSON.stringify(data));
-
-    const cache = await loadCache(path);
+    const cache = await loadCache();
 
     assertEquals(cache.size, 1);
     assertEquals(cache.has("mpdx-react#42"), true);
     assertEquals(cache.get("mpdx-react#42")!.title, "Test PR #42");
-    await Deno.remove(path);
   });
 });
 
 describe("saveCache", () => {
   it("round-trips through loadCache", async () => {
-    const path = await Deno.makeTempFile();
     const original = new Map<string, CachedPullRequest>();
     original.set("mpdx-react#42", makeCachedPR("mpdx-react", 42));
     original.set(
@@ -68,12 +63,30 @@ describe("saveCache", () => {
       makeCachedPR("staff_accounting_app", 10),
     );
 
-    await saveCache(path, original);
-    const loaded = await loadCache(path);
+    await saveCache(original);
+    const loaded = await loadCache();
 
     assertEquals(loaded.size, 2);
     assertEquals(loaded.get("mpdx-react#42")!.number, 42);
     assertEquals(loaded.get("staff_accounting_app#10")!.number, 10);
-    await Deno.remove(path);
+  });
+});
+
+describe("loadCacheUpdatedAt", () => {
+  it("returns null when cache does not exist", async () => {
+    const updatedAt = await loadCacheUpdatedAt();
+    assertEquals(updatedAt, null);
+  });
+
+  it("returns a date after saving", async () => {
+    const before = new Date();
+    const cache = new Map<string, CachedPullRequest>();
+    cache.set("mpdx-react#1", makeCachedPR("mpdx-react", 1));
+    await saveCache(cache);
+
+    const updatedAt = await loadCacheUpdatedAt();
+
+    assertEquals(updatedAt instanceof Date, true);
+    assertEquals(updatedAt!.getTime() >= before.getTime(), true);
   });
 });

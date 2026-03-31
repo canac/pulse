@@ -34,8 +34,6 @@ export const THRESHOLDS = {
   overdue: 8,
 } as const;
 
-export const CACHE_PATH = "./cache.json";
-
 export function getToken(): string {
   const token = Deno.env.get("GITHUB_TOKEN");
   if (!token) {
