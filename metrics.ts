@@ -11,6 +11,7 @@ export interface ReviewWindow {
   requestedAt: Temporal.Instant;
   respondedAt: Temporal.Instant | null;
   respondedBy: string | null;
+  requestedReviewers: string[];
   businessHours: number;
 }
 
@@ -52,6 +53,7 @@ export function* extractReviewWindows(
     );
 
     let openWindowStart: Temporal.Instant | null = null;
+    let windowReviewers: string[] = [];
 
     for (const item of sortedItems) {
       if (item.__typename === "ReviewRequestedEvent") {
@@ -63,6 +65,9 @@ export function* extractReviewWindows(
         // Only open a new window if none is currently open (de-duplicate)
         if (openWindowStart === null) {
           openWindowStart = Temporal.Instant.from(item.createdAt);
+        }
+        if (!windowReviewers.includes(requestedLogin)) {
+          windowReviewers.push(requestedLogin);
         }
         continue;
       }
@@ -92,10 +97,12 @@ export function* extractReviewWindows(
           requestedAt: openWindowStart,
           respondedAt,
           respondedBy: responderLogin,
+          requestedReviewers: windowReviewers,
           businessHours: businessHoursElapsed(openWindowStart, respondedAt),
         };
 
         openWindowStart = null;
+        windowReviewers = [];
       }
     }
 
@@ -107,6 +114,7 @@ export function* extractReviewWindows(
         requestedAt: openWindowStart,
         respondedAt: null,
         respondedBy: null,
+        requestedReviewers: windowReviewers,
         businessHours: businessHoursElapsed(openWindowStart, nowInstant),
       };
     }

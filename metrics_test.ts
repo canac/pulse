@@ -258,6 +258,58 @@ describe("extractReviewWindows", () => {
     // businessHours should be a non-negative number
     assertEquals(windows[0].businessHours >= 0, true);
   });
+
+  it("closed window includes requestedReviewers", () => {
+    const pullRequest = makePR({
+      author: "someauthor",
+      timelineItems: [
+        {
+          __typename: "ReviewRequestedEvent",
+          createdAt: "2026-03-30T14:00:00Z",
+          requestedReviewer: { login: "canac" },
+        },
+        {
+          __typename: "ReviewRequestedEvent",
+          createdAt: "2026-03-30T14:30:00Z",
+          requestedReviewer: { login: "dr-bizz" },
+        },
+        {
+          __typename: "PullRequestReview",
+          createdAt: "2026-03-30T15:00:00Z",
+          author: { login: "canac" },
+        },
+      ],
+    });
+
+    const windows = extractReviewWindows([pullRequest]).toArray();
+
+    assertEquals(windows.length, 1);
+    assertEquals(windows[0].requestedReviewers, ["canac", "dr-bizz"]);
+  });
+
+  it("open window includes requestedReviewers", () => {
+    const pullRequest = makePR({
+      author: "someauthor",
+      timelineItems: [
+        {
+          __typename: "ReviewRequestedEvent",
+          createdAt: "2026-03-30T14:00:00Z",
+          requestedReviewer: { login: "kegrimes" },
+        },
+        {
+          __typename: "ReviewRequestedEvent",
+          createdAt: "2026-03-30T14:30:00Z",
+          requestedReviewer: { login: "wjames111" },
+        },
+      ],
+    });
+
+    const windows = extractReviewWindows([pullRequest]).toArray();
+
+    assertEquals(windows.length, 1);
+    assertEquals(windows[0].respondedAt, null);
+    assertEquals(windows[0].requestedReviewers, ["kegrimes", "wjames111"]);
+  });
 });
 
 // ---------------------------------------------------------------------------
