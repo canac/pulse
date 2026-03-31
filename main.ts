@@ -16,8 +16,7 @@ const args = parseArgs(Deno.args, { boolean: ["cached"] });
 if (args._[0] === "serve") {
   const { startServer } = await import("./serve.ts");
   await startServer();
-  Deno.exit(0);
-}
+} else {
 
 const token = await getToken();
 
@@ -150,3 +149,5 @@ const perReviewerStats = new Map(
 
 printWaiting(allWindows);
 printStats(overall, perReviewerStats);
+
+}

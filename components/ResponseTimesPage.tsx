@@ -1,6 +1,6 @@
 import type { PageProps } from "fresh";
 import { Layout } from "./Layout.tsx";
-import type { ReviewWindow, Stats } from "../metrics.ts";
+import type { Stats } from "../metrics.ts";
 import type { ReviewerDetail, WeekBucket } from "../web-data.ts";
 import { BUSINESS_HOURS, THRESHOLDS } from "../config.ts";
 

@@ -1,9 +1,7 @@
-// deno-lint-ignore-file no-explicit-any
 import { App, page, staticFiles } from "fresh";
 import { CACHE_PATH, getToken, LOOKBACK_DAYS } from "./config.ts";
 import {
   cacheKey,
-  type CachedPullRequest,
   loadCache,
   saveCache,
 } from "./cache.ts";
@@ -127,6 +125,7 @@ export async function startServer(): Promise<void> {
         });
       },
     },
+    // deno-lint-ignore no-explicit-any
     component: WaitingPage as any,
   });
 
@@ -148,6 +147,7 @@ export async function startServer(): Promise<void> {
         });
       },
     },
+    // deno-lint-ignore no-explicit-any
     component: ResponseTimesPage as any,
   });
 
