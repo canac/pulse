@@ -12,7 +12,7 @@ const ActorSchema = z.object({
 const ReviewRequestedEventSchema = z.object({
   __typename: z.literal("ReviewRequestedEvent"),
   createdAt: z.string(),
-  requestedReviewer: z.object({ login: z.string() }).nullable(),
+  requestedReviewer: z.object({ login: z.string().optional() }).nullable(),
 });
 
 const PullRequestReviewSchema = z.object({

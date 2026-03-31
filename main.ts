@@ -1,3 +1,4 @@
+import "@std/dotenv/load";
 import { fetchPullRequests } from "./github.ts";
 import { computeStats, extractReviewWindows, type ReviewWindow } from "./metrics.ts";
 import { printStats, printWaiting } from "./output.ts";
