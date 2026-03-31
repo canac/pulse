@@ -15,7 +15,7 @@ const args = parseArgs(Deno.args, { boolean: ["cached"] });
 // Serve subcommand: start the web dashboard
 if (args._[0] === "serve") {
   const { startServer } = await import("./serve.tsx");
-  await startServer();
+  startServer();
 } else {
   const token = await getToken();
 
