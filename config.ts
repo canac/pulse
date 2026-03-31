@@ -1,14 +1,15 @@
 export const TEAM_MEMBERS = [
-  // TODO: fill in actual GitHub usernames before first run
-  "alice",
-  "bob",
-  "carol",
+  "canac",
+  "dr-bizz",
+  "kegrimes",
+  "wjames111",
+  "zweatshirt",
 ] as const;
 
 export const REPOS = [
-  // TODO: fill in actual repos before first run
-  { owner: "my-org", name: "repo-one" },
-  { owner: "my-org", name: "repo-two" },
+  { owner: "CruGlobal", name: "conf-registration-web" },
+  { owner: "CruGlobal", name: "mpdx-react" },
+  { owner: "CruGlobal", name: "staff_accounting_app" },
 ] as const;
 
 export const BUSINESS_HOURS = {
