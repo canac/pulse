@@ -9,7 +9,12 @@ import type { ReviewWindow } from "./metrics.ts";
 
 function makeWindow(overrides: Partial<ReviewWindow> = {}): ReviewWindow {
   return {
-    pr: { number: 1, title: "Test PR", url: "https://github.com/CruGlobal/repo/pull/1", author: "author" },
+    pr: {
+      number: 1,
+      title: "Test PR",
+      url: "https://github.com/CruGlobal/repo/pull/1",
+      author: "author",
+    },
     requestedAt: Temporal.Instant.from("2026-03-30T14:00:00Z"),
     respondedAt: Temporal.Instant.from("2026-03-30T15:00:00Z"),
     respondedBy: "canac",
@@ -29,7 +34,12 @@ describe("groupWaitingByReviewer", () => {
         businessHours: 5,
       }),
       makeWindow({
-        pr: { number: 2, title: "PR 2", url: "https://github.com/CruGlobal/repo/pull/2", author: "author" },
+        pr: {
+          number: 2,
+          title: "PR 2",
+          url: "https://github.com/CruGlobal/repo/pull/2",
+          author: "author",
+        },
         respondedAt: null,
         respondedBy: null,
         requestedReviewers: ["canac"],
@@ -47,7 +57,9 @@ describe("groupWaitingByReviewer", () => {
 
   it("skips closed windows", () => {
     const windows = [
-      makeWindow({ respondedAt: Temporal.Instant.from("2026-03-30T15:00:00Z") }),
+      makeWindow({
+        respondedAt: Temporal.Instant.from("2026-03-30T15:00:00Z"),
+      }),
     ];
 
     const grouped = groupWaitingByReviewer(windows);
