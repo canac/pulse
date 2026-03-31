@@ -17,7 +17,6 @@ function makePR(overrides: {
     title: "Test PR",
     url: "https://github.com/org/repo/pull/1",
     createdAt: "2026-03-30T14:00:00Z",
-    mergedAt: null,
     isDraft: false,
     state: "OPEN",
     author: { login: overrides.author ?? "someauthor" },

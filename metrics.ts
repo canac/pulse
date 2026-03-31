@@ -26,10 +26,6 @@ export interface Stats {
 
 const TEAM_MEMBER_SET = new Set<string>(TEAM_MEMBERS);
 
-function isTeamMember(login: string): boolean {
-  return TEAM_MEMBER_SET.has(login);
-}
-
 // ---------------------------------------------------------------------------
 // extractReviewWindows
 // ---------------------------------------------------------------------------
@@ -47,7 +43,7 @@ export function* extractReviewWindows(
     };
 
     // Sort timeline items by createdAt ascending
-    const sortedItems = [...pullRequest.timelineItems.nodes].sort(
+    const sortedItems = pullRequest.timelineItems.nodes.toSorted(
       (itemA, itemB) => {
         const instantA = Temporal.Instant.from(itemA.createdAt);
         const instantB = Temporal.Instant.from(itemB.createdAt);
@@ -61,7 +57,7 @@ export function* extractReviewWindows(
       if (item.__typename === "ReviewRequestedEvent") {
         // Only count review requests directed at a team member
         const requestedLogin = item.requestedReviewer?.login;
-        if (!requestedLogin || !isTeamMember(requestedLogin)) {
+        if (!requestedLogin || !TEAM_MEMBER_SET.has(requestedLogin)) {
           continue;
         }
         // Only open a new window if none is currently open (de-duplicate)
@@ -83,7 +79,7 @@ export function* extractReviewWindows(
         const responderLogin = item.author?.login ?? "";
 
         // Ignore responses from the PR author or non-team members
-        if (responderLogin === prAuthor || !isTeamMember(responderLogin)) {
+        if (responderLogin === prAuthor || !TEAM_MEMBER_SET.has(responderLogin)) {
           continue;
         }
 
@@ -124,7 +120,7 @@ export function computeStats(values: number[]): Stats {
     return { median: 0, p90: 0, count: 0 };
   }
 
-  const sorted = [...values].sort((numA, numB) => numA - numB);
+  const sorted = values.toSorted((numA, numB) => numA - numB);
   const count = sorted.length;
 
   // Compute median

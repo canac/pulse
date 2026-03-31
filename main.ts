@@ -58,10 +58,7 @@ for (const window of closedWindows) {
 }
 
 const perReviewerStats = new Map(
-  [...hoursByReviewer.entries()].map(([name, hours]) => [
-    name,
-    computeStats(hours),
-  ]),
+  Array.from(hoursByReviewer, ([name, hours]) => [name, computeStats(hours)]),
 );
 
 // Print output

@@ -38,7 +38,7 @@ const PullRequestSchema = z.object({
   title: z.string(),
   url: z.string(),
   createdAt: z.string(),
-  mergedAt: z.string().nullable(),
+
   isDraft: z.boolean(),
   state: z.enum(["OPEN", "MERGED", "CLOSED"]),
   author: ActorSchema,
@@ -79,7 +79,7 @@ const PULL_REQUESTS_QUERY = `
       ) {
         pageInfo { hasNextPage endCursor }
         nodes {
-          number title url createdAt mergedAt isDraft state
+          number title url createdAt isDraft state
           author { login }
           timelineItems(first: 100, itemTypes: [
             REVIEW_REQUESTED_EVENT
@@ -88,18 +88,9 @@ const PULL_REQUESTS_QUERY = `
           ]) {
             nodes {
               __typename
-              ... on ReviewRequestedEvent {
-                createdAt
-                requestedReviewer { ... on User { login } }
-              }
-              ... on PullRequestReview {
-                createdAt
-                author { login }
-              }
-              ... on IssueComment {
-                createdAt
-                author { login }
-              }
+              ... on ReviewRequestedEvent { createdAt requestedReviewer { ... on User { login } } }
+              ... on PullRequestReview { createdAt author { login } }
+              ... on IssueComment { createdAt author { login } }
             }
           }
         }
@@ -155,7 +146,7 @@ async function graphql(
 
   const json = await response.json();
 
-  if (json.errors && json.errors.length > 0) {
+  if (json.errors?.length) {
     const errorMessages = json.errors
       .map((err: { message: string }) => err.message)
       .join("; ");
@@ -185,9 +176,8 @@ async function fetchAllPagesForRepo(
 ): Promise<PullRequest[]> {
   const pullRequests: PullRequest[] = [];
   let cursor: string | null = null;
-  let hasNextPage = true;
 
-  while (hasNextPage) {
+  while (true) {
     const result = await graphql(token, {
       owner: GITHUB_ORG,
       name: repoName,
@@ -198,7 +188,6 @@ async function fetchAllPagesForRepo(
     const pageInfo = pullRequestsPage.pageInfo;
 
     let reachedOldPR = false;
-
     for (const pullRequest of pullRequestsPage.nodes) {
       if (pullRequest.isDraft) {
         continue;
@@ -214,11 +203,9 @@ async function fetchAllPagesForRepo(
     }
 
     if (reachedOldPR || !pageInfo.hasNextPage) {
-      hasNextPage = false;
-    } else {
-      cursor = pageInfo.endCursor;
-      hasNextPage = pageInfo.hasNextPage;
+      break;
     }
+    cursor = pageInfo.endCursor;
   }
 
   return pullRequests;

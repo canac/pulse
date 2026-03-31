@@ -14,14 +14,22 @@ function formatHours(hours: number): string {
 }
 
 function colorize(hours: number, text: string): string {
-  if (hours < THRESHOLDS.warning) return green(text);
-  if (hours < THRESHOLDS.overdue) return yellow(text);
+  if (hours < THRESHOLDS.warning) {
+    return green(text);
+  }
+  if (hours < THRESHOLDS.overdue) {
+    return yellow(text);
+  }
   return red(text);
 }
 
 function urgencyEmoji(hours: number): string {
-  if (hours < THRESHOLDS.warning) return "🟢";
-  if (hours < THRESHOLDS.overdue) return "🟡";
+  if (hours < THRESHOLDS.warning) {
+    return "🟢";
+  }
+  if (hours < THRESHOLDS.overdue) {
+    return "🟡";
+  }
   return "🔴";
 }
 
@@ -67,7 +75,7 @@ export function printStats(
   );
   console.log();
 
-  const sorted = [...perReviewer.entries()].sort(
+  const sorted = Array.from(perReviewer.entries()).sort(
     (entryA, entryB) => entryB[1].median - entryA[1].median,
   );
 

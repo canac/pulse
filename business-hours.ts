@@ -8,6 +8,26 @@ function isWeekend(dayOfWeek: number): boolean {
   return dayOfWeek === 6 || dayOfWeek === 7;
 }
 
+/** Return the fractional hour-of-day (e.g. 9:30 → 9.5). */
+function toHourOfDay(zdt: Temporal.ZonedDateTime): number {
+  return zdt.hour + zdt.minute / 60 + zdt.second / 3600;
+}
+
+/** Return a copy of zdt with the time set to exactly the given hour. */
+function withTime(
+  zdt: Temporal.ZonedDateTime,
+  hour: number,
+): Temporal.ZonedDateTime {
+  return zdt.with({
+    hour,
+    minute: 0,
+    second: 0,
+    millisecond: 0,
+    microsecond: 0,
+    nanosecond: 0,
+  });
+}
+
 /**
  * Advance a ZonedDateTime to the start of the next business day at BH_START.
  * "Next business day" means skip weekends.
@@ -15,14 +35,7 @@ function isWeekend(dayOfWeek: number): boolean {
 function nextBusinessDayStart(
   zdt: Temporal.ZonedDateTime,
 ): Temporal.ZonedDateTime {
-  let candidate = zdt.with({
-    hour: BH_START,
-    minute: 0,
-    second: 0,
-    millisecond: 0,
-    microsecond: 0,
-    nanosecond: 0,
-  }).add({ days: 1 });
+  let candidate = withTime(zdt, BH_START).add({ days: 1 });
   while (isWeekend(candidate.dayOfWeek)) {
     candidate = candidate.add({ days: 1 });
   }
@@ -36,18 +49,11 @@ function nextBusinessDayStart(
  * - If within business hours, return as-is (only hour precision matters).
  */
 function clampStart(zdt: Temporal.ZonedDateTime): Temporal.ZonedDateTime {
-  const hourDecimal = zdt.hour + zdt.minute / 60 + zdt.second / 3600;
+  const hourDecimal = toHourOfDay(zdt);
 
   if (isWeekend(zdt.dayOfWeek)) {
     // Advance to the following Monday at BH_START
-    let candidate = zdt.with({
-      hour: BH_START,
-      minute: 0,
-      second: 0,
-      millisecond: 0,
-      microsecond: 0,
-      nanosecond: 0,
-    });
+    let candidate = withTime(zdt, BH_START);
     while (isWeekend(candidate.dayOfWeek)) {
       candidate = candidate.add({ days: 1 });
     }
@@ -55,20 +61,11 @@ function clampStart(zdt: Temporal.ZonedDateTime): Temporal.ZonedDateTime {
   }
 
   if (hourDecimal >= BH_END) {
-    // After close — move to next business day open
     return nextBusinessDayStart(zdt);
   }
 
   if (hourDecimal < BH_START) {
-    // Before open — clamp to open of the same day
-    return zdt.with({
-      hour: BH_START,
-      minute: 0,
-      second: 0,
-      millisecond: 0,
-      microsecond: 0,
-      nanosecond: 0,
-    });
+    return withTime(zdt, BH_START);
   }
 
   return zdt;
@@ -81,18 +78,11 @@ function clampStart(zdt: Temporal.ZonedDateTime): Temporal.ZonedDateTime {
  * - If within business hours, return as-is.
  */
 function clampEnd(zdt: Temporal.ZonedDateTime): Temporal.ZonedDateTime {
-  const hourDecimal = zdt.hour + zdt.minute / 60 + zdt.second / 3600;
+  const hourDecimal = toHourOfDay(zdt);
 
   if (isWeekend(zdt.dayOfWeek)) {
     // Retreat to the previous Friday (or last business day) at BH_END
-    let candidate = zdt.with({
-      hour: BH_END,
-      minute: 0,
-      second: 0,
-      millisecond: 0,
-      microsecond: 0,
-      nanosecond: 0,
-    });
+    let candidate = withTime(zdt, BH_END);
     while (isWeekend(candidate.dayOfWeek)) {
       candidate = candidate.subtract({ days: 1 });
     }
@@ -101,14 +91,7 @@ function clampEnd(zdt: Temporal.ZonedDateTime): Temporal.ZonedDateTime {
 
   if (hourDecimal <= BH_START) {
     // At or before open — retreat to previous business day close
-    let candidate = zdt.with({
-      hour: BH_END,
-      minute: 0,
-      second: 0,
-      millisecond: 0,
-      microsecond: 0,
-      nanosecond: 0,
-    }).subtract({ days: 1 });
+    let candidate = withTime(zdt, BH_END).subtract({ days: 1 });
     while (isWeekend(candidate.dayOfWeek)) {
       candidate = candidate.subtract({ days: 1 });
     }
@@ -116,15 +99,7 @@ function clampEnd(zdt: Temporal.ZonedDateTime): Temporal.ZonedDateTime {
   }
 
   if (hourDecimal > BH_END) {
-    // After close — clamp to close of the same day
-    return zdt.with({
-      hour: BH_END,
-      minute: 0,
-      second: 0,
-      millisecond: 0,
-      microsecond: 0,
-      nanosecond: 0,
-    });
+    return withTime(zdt, BH_END);
   }
 
   return zdt;
@@ -137,14 +112,7 @@ function fullBusinessDaysBetween(
 ): number {
   let count = 0;
   // Start from the day after startZoned's date, stop before endZoned's date
-  let currentDay = startZoned.add({ days: 1 }).with({
-    hour: BH_START,
-    minute: 0,
-    second: 0,
-    millisecond: 0,
-    microsecond: 0,
-    nanosecond: 0,
-  });
+  let currentDay = withTime(startZoned.add({ days: 1 }), BH_START);
 
   // Compare calendar dates only
   while (
@@ -192,21 +160,12 @@ export function businessHoursElapsed(
 
   if (sameDayComparison === 0) {
     // Same calendar day: just subtract the hours
-    const startHour = clampedStart.hour + clampedStart.minute / 60 +
-      clampedStart.second / 3600;
-    const endHour = clampedEnd.hour + clampedEnd.minute / 60 +
-      clampedEnd.second / 3600;
-    return Math.max(0, endHour - startHour);
+    return Math.max(0, toHourOfDay(clampedEnd) - toHourOfDay(clampedStart));
   }
 
   // Different days: partial first day + full middle days + partial last day
-  const startHour = clampedStart.hour + clampedStart.minute / 60 +
-    clampedStart.second / 3600;
-  const endHour = clampedEnd.hour + clampedEnd.minute / 60 +
-    clampedEnd.second / 3600;
-
-  const hoursOnStartDay = BH_END - startHour;
-  const hoursOnEndDay = endHour - BH_START;
+  const hoursOnStartDay = BH_END - toHourOfDay(clampedStart);
+  const hoursOnEndDay = toHourOfDay(clampedEnd) - BH_START;
   const fullMiddleDays = fullBusinessDaysBetween(clampedStart, clampedEnd);
   const totalHours = hoursOnStartDay + fullMiddleDays * HOURS_PER_DAY +
     hoursOnEndDay;
