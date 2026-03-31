@@ -1,16 +1,9 @@
 import { bold, green, red, yellow } from "@std/fmt/colors";
 import type { ReviewWindow, Stats } from "./metrics.ts";
-import { BUSINESS_HOURS, THRESHOLDS } from "./config.ts";
-
-const HOURS_PER_DAY = BUSINESS_HOURS.end - BUSINESS_HOURS.start;
+import { THRESHOLDS } from "./config.ts";
 
 function formatHours(hours: number): string {
-  if (hours < HOURS_PER_DAY) {
-    return `${hours.toFixed(1)}h`;
-  }
-  const days = Math.floor(hours / HOURS_PER_DAY);
-  const remainder = hours % HOURS_PER_DAY;
-  return `${days}d ${remainder.toFixed(1)}h`;
+  return `${hours.toFixed(1)}h`;
 }
 
 function colorize(hours: number, text: string): string {

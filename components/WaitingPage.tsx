@@ -1,9 +1,6 @@
 import { Layout } from "./Layout.tsx";
 import type { ReviewWindow } from "../metrics.ts";
 import { TEAM_MEMBERS, THRESHOLDS } from "../config.ts";
-import { BUSINESS_HOURS } from "../config.ts";
-
-const HOURS_PER_DAY = BUSINESS_HOURS.end - BUSINESS_HOURS.start;
 
 interface WaitingPageData {
   waitingByReviewer: Map<string, ReviewWindow[]>;
@@ -18,12 +15,7 @@ function statusClass(hours: number): string {
 }
 
 function formatHours(hours: number): string {
-  if (hours < HOURS_PER_DAY) {
-    return `${hours.toFixed(1)}h`;
-  }
-  const days = Math.floor(hours / HOURS_PER_DAY);
-  const remainder = hours % HOURS_PER_DAY;
-  return `${days}d ${remainder.toFixed(1)}h`;
+  return `${hours.toFixed(1)}h`;
 }
 
 function repoFromUrl(url: string): string {

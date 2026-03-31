@@ -1,9 +1,7 @@
 import { Layout } from "./Layout.tsx";
 import type { Stats } from "../metrics.ts";
 import type { ReviewerDetail, WeekBucket } from "../web-data.ts";
-import { BUSINESS_HOURS, THRESHOLDS } from "../config.ts";
-
-const HOURS_PER_DAY = BUSINESS_HOURS.end - BUSINESS_HOURS.start;
+import { THRESHOLDS } from "../config.ts";
 
 interface ResponseTimesData {
   overall: Stats;
@@ -20,12 +18,7 @@ function statusClass(hours: number): string {
 }
 
 function formatHours(hours: number): string {
-  if (hours < HOURS_PER_DAY) {
-    return `${hours.toFixed(1)}h`;
-  }
-  const days = Math.floor(hours / HOURS_PER_DAY);
-  const remainder = hours % HOURS_PER_DAY;
-  return `${days}d ${remainder.toFixed(1)}h`;
+  return `${hours.toFixed(1)}h`;
 }
 
 function repoFromUrl(url: string): string {
