@@ -1,4 +1,3 @@
-import type { PageProps } from "fresh";
 import { Layout } from "./Layout.tsx";
 import type { Stats } from "../metrics.ts";
 import type { ReviewerDetail, WeekBucket } from "../web-data.ts";
@@ -180,8 +179,7 @@ function ReviewerRow({ detail }: { detail: ReviewerDetail }) {
               <span>
                 <a href={window.pr.url}>
                   {repoFromUrl(window.pr.url)} #{window.pr.number}
-                </a>
-                {" "}
+                </a>{" "}
                 <span class="drill-down-title">{window.pr.title}</span>
               </span>
               <span class={`status-${statusClass(window.businessHours)}`}>
@@ -195,12 +193,14 @@ function ReviewerRow({ detail }: { detail: ReviewerDetail }) {
   );
 }
 
-export function ResponseTimesPage({ data }: PageProps<ResponseTimesData>) {
+export function ResponseTimesPage(
+  { overall, trend, reviewerDetails, lastUpdated }: ResponseTimesData,
+) {
   return (
-    <Layout activeTab="response-times" lastUpdated={data.lastUpdated}>
-      <OverallStats overall={data.overall} />
-      <WeeklyChart trend={data.trend} />
-      <ReviewerTable reviewerDetails={data.reviewerDetails} />
+    <Layout activeTab="response-times" lastUpdated={lastUpdated}>
+      <OverallStats overall={overall} />
+      <WeeklyChart trend={trend} />
+      <ReviewerTable reviewerDetails={reviewerDetails} />
     </Layout>
   );
 }

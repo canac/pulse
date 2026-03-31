@@ -70,13 +70,25 @@ a {
 }
 
 /* Status colors */
-.status-ok { color: var(--color-ok); }
-.status-warning { color: var(--color-warning); }
-.status-overdue { color: var(--color-overdue); }
+.status-ok {
+  color: var(--color-ok);
+}
+.status-warning {
+  color: var(--color-warning);
+}
+.status-overdue {
+  color: var(--color-overdue);
+}
 
-.border-ok { border-left-color: var(--color-ok); }
-.border-warning { border-left-color: var(--color-warning); }
-.border-overdue { border-left-color: var(--color-overdue); }
+.border-ok {
+  border-left-color: var(--color-ok);
+}
+.border-warning {
+  border-left-color: var(--color-warning);
+}
+.border-overdue {
+  border-left-color: var(--color-overdue);
+}
 
 /* Reviewer groups (waiting page) */
 .reviewer-group {
@@ -259,9 +271,15 @@ a {
   height: var(--bar-height);
 }
 
-.bar-fill.bg-ok { background: var(--color-ok); }
-.bar-fill.bg-warning { background: var(--color-warning); }
-.bar-fill.bg-overdue { background: var(--color-overdue); }
+.bar-fill.bg-ok {
+  background: var(--color-ok);
+}
+.bar-fill.bg-warning {
+  background: var(--color-warning);
+}
+.bar-fill.bg-overdue {
+  background: var(--color-overdue);
+}
 
 .chart-labels {
   display: flex;

@@ -1,4 +1,3 @@
-import type { PageProps } from "fresh";
 import { Layout } from "./Layout.tsx";
 import type { ReviewWindow } from "../metrics.ts";
 import { TEAM_MEMBERS, THRESHOLDS } from "../config.ts";
@@ -42,11 +41,13 @@ function avatarColor(name: string): string {
   return AVATAR_COLORS[hash];
 }
 
-export function WaitingPage({ data }: PageProps<WaitingPageData>) {
+export function WaitingPage(
+  { waitingByReviewer, lastUpdated }: WaitingPageData,
+) {
   return (
-    <Layout activeTab="waiting" lastUpdated={data.lastUpdated}>
+    <Layout activeTab="waiting" lastUpdated={lastUpdated}>
       {TEAM_MEMBERS.map((reviewer) => {
-        const windows = data.waitingByReviewer.get(reviewer) ?? [];
+        const windows = waitingByReviewer.get(reviewer) ?? [];
         return (
           <div class="reviewer-group" key={reviewer}>
             <div class="reviewer-header">
@@ -67,7 +68,9 @@ export function WaitingPage({ data }: PageProps<WaitingPageData>) {
                 <div class="pr-list">
                   {windows.map((window) => (
                     <div
-                      class={`pr-card border-${statusClass(window.businessHours)}`}
+                      class={`pr-card border-${
+                        statusClass(window.businessHours)
+                      }`}
                       key={window.pr.url}
                     >
                       <div class="pr-card-row">
@@ -78,7 +81,9 @@ export function WaitingPage({ data }: PageProps<WaitingPageData>) {
                           <span class="pr-title">{window.pr.title}</span>
                         </div>
                         <span
-                          class={`pr-hours status-${statusClass(window.businessHours)}`}
+                          class={`pr-hours status-${
+                            statusClass(window.businessHours)
+                          }`}
                         >
                           {formatHours(window.businessHours)}
                         </span>

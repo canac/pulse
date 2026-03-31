@@ -1,9 +1,9 @@
-import type { ComponentChildren } from "preact";
+import type { Child } from "hono/jsx";
 
 export function Layout(
   { activeTab, children, lastUpdated }: {
     activeTab: "waiting" | "response-times";
-    children: ComponentChildren;
+    children: Child;
     lastUpdated: Date | null;
   },
 ) {

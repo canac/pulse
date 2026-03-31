@@ -43,7 +43,10 @@ export function printWaiting(windows: ReviewWindow[]): void {
       : "🔴";
     console.log(
       `  ${emoji} ${window.pr.url} — "${window.pr.title}" (${
-        colorize(window.businessHours, `${formatHours(window.businessHours)} waiting`)
+        colorize(
+          window.businessHours,
+          `${formatHours(window.businessHours)} waiting`,
+        )
       })`,
     );
     console.log(`     Opened by @${window.pr.author}`);
@@ -79,9 +82,7 @@ export function printStats(
       console.log(
         `    @${reviewer} — ${
           colorize(stats.median, `median ${formatHours(stats.median)}`)
-        }, ${
-          colorize(stats.p75, `P75 ${formatHours(stats.p75)}`)
-        }, ${
+        }, ${colorize(stats.p75, `P75 ${formatHours(stats.p75)}`)}, ${
           colorize(stats.p90, `P90 ${formatHours(stats.p90)}`)
         } (${stats.count} reviews)`,
       );

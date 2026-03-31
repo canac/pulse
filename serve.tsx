@@ -1,10 +1,6 @@
-import { App, page } from "fresh";
+import { Hono } from "hono";
 import { CACHE_PATH, getToken, LOOKBACK_DAYS } from "./config.ts";
-import {
-  cacheKey,
-  loadCache,
-  saveCache,
-} from "./cache.ts";
+import { cacheKey, loadCache, saveCache } from "./cache.ts";
 import { fetchPullRequests, fetchPullRequestsByNumber } from "./github.ts";
 import {
   computeStats,
@@ -110,64 +106,57 @@ async function loadWindowsAndMeta(): Promise<{
   };
 }
 
-export async function startServer(): Promise<void> {
-  const app = new App();
-  app.use(async (ctx) => {
-    try {
-      const filePath = `./static${ctx.url.pathname}`;
-      const stat = await Deno.stat(filePath);
-      if (!stat.isFile) {
-        return await ctx.next();
-      }
-      const file = await Deno.open(filePath, { read: true });
-      const headers: Record<string, string> = {};
-      if (filePath.endsWith(".css")) {
-        headers["content-type"] = "text/css; charset=utf-8";
-      }
-      return new Response(file.readable, { headers });
-    } catch {
-      return await ctx.next();
+const app = new Hono();
+
+app.use(async (ctx, next) => {
+  try {
+    const filePath = `./static${ctx.req.path}`;
+    const stat = await Deno.stat(filePath);
+    if (!stat.isFile) {
+      return await next();
     }
-  });
+    const file = await Deno.open(filePath, { read: true });
+    const headers: Record<string, string> = {};
+    if (filePath.endsWith(".css")) {
+      headers["content-type"] = "text/css; charset=utf-8";
+    }
+    return new Response(file.readable, { headers });
+  } catch {
+    return await next();
+  }
+});
 
-  app.route("/", {
-    handler: {
-      async GET() {
-        const { allWindows, lastUpdated } = await loadWindowsAndMeta();
-        maybeRefreshInBackground();
-        return page({
-          waitingByReviewer: groupWaitingByReviewer(allWindows),
-          lastUpdated,
-        });
-      },
-    },
-    // deno-lint-ignore no-explicit-any
-    component: WaitingPage as any,
-  });
+app.get("/", async (ctx) => {
+  const { allWindows, lastUpdated } = await loadWindowsAndMeta();
+  maybeRefreshInBackground();
+  return ctx.html(
+    <WaitingPage
+      waitingByReviewer={groupWaitingByReviewer(allWindows)}
+      lastUpdated={lastUpdated}
+    />,
+  );
+});
 
-  app.route("/response-times", {
-    handler: {
-      async GET() {
-        const { allWindows, lastUpdated } = await loadWindowsAndMeta();
-        const closedWindows = allWindows.filter((window) =>
-          window.respondedAt !== null
-        );
-        maybeRefreshInBackground();
-        return page({
-          overall: computeStats(
-            closedWindows.map((window) => window.businessHours),
-          ),
-          trend: computeWeeklyTrend(allWindows),
-          reviewerDetails: computeReviewerDetails(allWindows),
-          lastUpdated,
-        });
-      },
-    },
-    // deno-lint-ignore no-explicit-any
-    component: ResponseTimesPage as any,
-  });
+app.get("/response-times", async (ctx) => {
+  const { allWindows, lastUpdated } = await loadWindowsAndMeta();
+  const closedWindows = allWindows.filter((window) =>
+    window.respondedAt !== null
+  );
+  maybeRefreshInBackground();
+  return ctx.html(
+    <ResponseTimesPage
+      overall={computeStats(
+        closedWindows.map((window) => window.businessHours),
+      )}
+      trend={computeWeeklyTrend(allWindows)}
+      reviewerDetails={computeReviewerDetails(allWindows)}
+      lastUpdated={lastUpdated}
+    />,
+  );
+});
 
+export function startServer(): void {
   const portEnv = Deno.env.get("PORT");
   const port = portEnv ? Number(portEnv) : undefined;
-  await app.listen({ port });
+  Deno.serve({ port }, app.fetch);
 }
