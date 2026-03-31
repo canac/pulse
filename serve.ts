@@ -1,4 +1,4 @@
-import { App, page, staticFiles } from "fresh";
+import { App, page } from "fresh";
 import { CACHE_PATH, getToken, LOOKBACK_DAYS } from "./config.ts";
 import {
   cacheKey,
@@ -112,7 +112,23 @@ async function loadWindowsAndMeta(): Promise<{
 
 export async function startServer(): Promise<void> {
   const app = new App();
-  app.use(staticFiles());
+  app.use(async (ctx) => {
+    try {
+      const filePath = `./static${ctx.url.pathname}`;
+      const stat = await Deno.stat(filePath);
+      if (!stat.isFile) {
+        return await ctx.next();
+      }
+      const file = await Deno.open(filePath, { read: true });
+      const headers: Record<string, string> = {};
+      if (filePath.endsWith(".css")) {
+        headers["content-type"] = "text/css; charset=utf-8";
+      }
+      return new Response(file.readable, { headers });
+    } catch {
+      return await ctx.next();
+    }
+  });
 
   app.route("/", {
     handler: {
