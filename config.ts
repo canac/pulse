@@ -33,3 +33,13 @@ export const THRESHOLDS = {
 } as const;
 
 export const CACHE_PATH = "./cache.json";
+
+export async function getToken(): Promise<string> {
+  const { load } = await import("@std/dotenv");
+  const env = await load();
+  const token = env.GITHUB_TOKEN;
+  if (!token) {
+    throw new Error("GITHUB_TOKEN must be set in .env file");
+  }
+  return token;
+}

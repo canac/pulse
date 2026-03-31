@@ -1,7 +1,6 @@
-import { load } from "@std/dotenv";
 import { Spinner } from "@std/cli/unstable-spinner";
 import { parseArgs } from "@std/cli/parse-args";
-import { CACHE_PATH, LOOKBACK_DAYS, REPOS } from "./config.ts";
+import { CACHE_PATH, getToken, LOOKBACK_DAYS, REPOS } from "./config.ts";
 import { fetchPullRequests, fetchPullRequestsByNumber } from "./github.ts";
 import {
   computeStats,
@@ -13,12 +12,14 @@ import { cacheKey, loadCache, saveCache } from "./cache.ts";
 
 const args = parseArgs(Deno.args, { boolean: ["cached"] });
 
-const env = await load();
-const token = env.GITHUB_TOKEN;
-if (!token) {
-  console.error("Error: GITHUB_TOKEN must be set in .env file.");
-  Deno.exit(1);
+// Serve subcommand: start the web dashboard
+if (args._[0] === "serve") {
+  const { startServer } = await import("./serve.ts");
+  await startServer();
+  Deno.exit(0);
 }
+
+const token = await getToken();
 
 // Step 1: Load cache
 const cache = await loadCache(CACHE_PATH);

@@ -1,3 +1,4 @@
+import type { PageProps } from "fresh";
 import { Layout } from "./Layout.tsx";
 import type { ReviewWindow, Stats } from "../metrics.ts";
 import type { ReviewerDetail, WeekBucket } from "../web-data.ts";
@@ -184,7 +185,7 @@ function ReviewerRow({ detail }: { detail: ReviewerDetail }) {
   );
 }
 
-export function ResponseTimesPage({ data }: { data: ResponseTimesData }) {
+export function ResponseTimesPage({ data }: PageProps<ResponseTimesData>) {
   return (
     <Layout activeTab="response-times" lastUpdated={data.lastUpdated}>
       <OverallStats overall={data.overall} />

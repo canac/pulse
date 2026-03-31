@@ -9,7 +9,6 @@
     "fresh": "jsr:@fresh/core@^2.2.2",
     "preact": "npm:preact@^10.27.2"
   },
-  "nodeModulesDir": "manual",
   "tasks": {
     "start": "deno run --allow-read=.env,cache.json --allow-write=cache.json --allow-net=api.github.com main.ts",
     "serve": "deno run --allow-read --allow-write=cache.json --allow-net --allow-env main.ts serve",

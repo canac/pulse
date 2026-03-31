@@ -1,3 +1,4 @@
+import type { PageProps } from "fresh";
 import { Layout } from "./Layout.tsx";
 import type { ReviewWindow } from "../metrics.ts";
 import { TEAM_MEMBERS, THRESHOLDS } from "../config.ts";
@@ -41,7 +42,7 @@ function avatarColor(name: string): string {
   return AVATAR_COLORS[hash];
 }
 
-export function WaitingPage({ data }: { data: WaitingPageData }) {
+export function WaitingPage({ data }: PageProps<WaitingPageData>) {
   return (
     <Layout activeTab="waiting" lastUpdated={data.lastUpdated}>
       {TEAM_MEMBERS.map((reviewer) => {
