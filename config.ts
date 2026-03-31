@@ -29,3 +29,5 @@ export const THRESHOLDS = {
   /** 8+ business hours — overdue */
   overdue: 8,
 } as const;
+
+export const CACHE_PATH = "./cache.json";
