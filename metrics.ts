@@ -79,7 +79,9 @@ export function* extractReviewWindows(
         const responderLogin = item.author?.login ?? "";
 
         // Ignore responses from the PR author or non-team members
-        if (responderLogin === prAuthor || !TEAM_MEMBER_SET.has(responderLogin)) {
+        if (
+          responderLogin === prAuthor || !TEAM_MEMBER_SET.has(responderLogin)
+        ) {
           continue;
         }
 

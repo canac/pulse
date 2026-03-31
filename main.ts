@@ -2,10 +2,7 @@ import { load } from "@std/dotenv";
 import { Spinner } from "@std/cli/unstable-spinner";
 import { parseArgs } from "@std/cli/parse-args";
 import { CACHE_PATH, LOOKBACK_DAYS, REPOS } from "./config.ts";
-import {
-  fetchPullRequests,
-  fetchPullRequestsByNumber,
-} from "./github.ts";
+import { fetchPullRequests, fetchPullRequestsByNumber } from "./github.ts";
 import {
   computeStats,
   extractReviewWindows,

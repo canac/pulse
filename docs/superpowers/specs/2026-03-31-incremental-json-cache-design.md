@@ -4,20 +4,20 @@
 
 The CLI currently fetches all PRs from the last 30 days on every run — about 200
 PRs across 5 paginated GraphQL requests. Most of those PRs are closed/merged and
-will never change. This spec adds a local JSON file cache so that subsequent runs
-only fetch what's changed: currently-open PRs and recently-closed ones.
+will never change. This spec adds a local JSON file cache so that subsequent
+runs only fetch what's changed: currently-open PRs and recently-closed ones.
 
 ## Overview
 
 A `cache.json` file in the project directory stores the full `PullRequest` blobs
 (with timeline items) from previous runs. On each invocation the CLI loads the
-cache, fetches only the delta from GitHub, merges it, writes the cache back, then
-runs the existing metrics pipeline against the cached data.
+cache, fetches only the delta from GitHub, merges it, writes the cache back,
+then runs the existing metrics pipeline against the cached data.
 
 **First run** does a full fetch (identical to today). **Subsequent runs** only
-re-fetch open PRs plus any PRs that transitioned from open to closed/merged since
-the last run. **`--cached` flag** skips all network calls and uses the cache
-as-is (offline mode).
+re-fetch open PRs plus any PRs that transitioned from open to closed/merged
+since the last run. **`--cached` flag** skips all network calls and uses the
+cache as-is (offline mode).
 
 ## Data Model
 
@@ -29,7 +29,7 @@ The file is a JSON array of `CachedPullRequest` objects:
 
 ```typescript
 interface CachedPullRequest {
-  repo: string;          // e.g. "mpdx-react"
+  repo: string; // e.g. "mpdx-react"
   number: number;
   title: string;
   url: string;
@@ -88,8 +88,8 @@ query($owner: String!, $name: String!) {
 }
 ```
 
-This keeps the request count to at most one per repo that had closures (typically
-0-3 extra requests per run).
+This keeps the request count to at most one per repo that had closures
+(typically 0-3 extra requests per run).
 
 ## Changes to Existing Files
 
@@ -106,7 +106,7 @@ This keeps the request count to at most one per repo that had closures (typicall
       states?: ("OPEN" | "MERGED" | "CLOSED")[];
       onRepoComplete?: () => void;
     },
-  ): Promise<PullRequest[]>
+  ): Promise<PullRequest[]>;
   ```
   Default `states` to `["OPEN", "MERGED", "CLOSED"]`. Pass into the GraphQL
   query as a variable instead of hardcoding.
@@ -116,7 +116,7 @@ This keeps the request count to at most one per repo that had closures (typicall
     token: string,
     repo: string,
     prNumbers: number[],
-  ): Promise<PullRequest[]>
+  ): Promise<PullRequest[]>;
   ```
   Uses GraphQL aliases to batch multiple PR-by-number lookups into one request
   per repo. Returns the same `PullRequest` shape.
@@ -129,7 +129,10 @@ export interface CachedPullRequest extends PullRequest {
 }
 
 export function loadCache(path: string): Map<string, CachedPullRequest>;
-export function saveCache(path: string, cache: Map<string, CachedPullRequest>): void;
+export function saveCache(
+  path: string,
+  cache: Map<string, CachedPullRequest>,
+): void;
 export function cacheKey(repo: string, number: number): string;
 ```
 
@@ -144,8 +147,8 @@ export function cacheKey(repo: string, number: number): string;
   above.
 - `--cached` flag now means "offline mode" (skip network, read cache only)
   instead of controlling the Web Cache API.
-- Spinner messages update to reflect what's happening: "Fetching all PRs..."
-  on first run, "Refreshing open PRs..." on incremental, skipped on `--cached`.
+- Spinner messages update to reflect what's happening: "Fetching all PRs..." on
+  first run, "Refreshing open PRs..." on incremental, skipped on `--cached`.
 - After merging, filter cache values to PRs within `LOOKBACK_DAYS` before
   feeding into the pipeline.
 

@@ -1,10 +1,17 @@
 # Incremental JSON Cache — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use
+> superpowers:subagent-driven-development (recommended) or
+> superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a local JSON file cache so subsequent CLI runs only fetch open/changed PRs from GitHub instead of the full 30-day history.
+**Goal:** Add a local JSON file cache so subsequent CLI runs only fetch
+open/changed PRs from GitHub instead of the full 30-day history.
 
-**Architecture:** A `cache.json` file stores full PR blobs. On first run, all PRs are fetched and cached. On subsequent runs, only open PRs are re-fetched; PRs that transitioned from open to closed/merged are fetched individually by number. `--cached` flag skips all network calls (offline mode).
+**Architecture:** A `cache.json` file stores full PR blobs. On first run, all
+PRs are fetched and cached. On subsequent runs, only open PRs are re-fetched;
+PRs that transitioned from open to closed/merged are fetched individually by
+number. `--cached` flag skips all network calls (offline mode).
 
 **Tech Stack:** Deno, TypeScript, Zod (existing), `@std/cli` spinner (existing)
 
@@ -12,21 +19,22 @@
 
 ## File Structure
 
-| File | Responsibility |
-|------|---------------|
-| `config.ts` | Add `CACHE_PATH` constant |
-| `cache.ts` | **New** — load/save JSON cache, `CachedPullRequest` type |
-| `cache_test.ts` | **New** — tests for cache module |
-| `github.ts` | Remove Web Cache API, add `states` param, add `fetchPullRequestsByNumber`, tag PRs with repo name |
-| `main.ts` | New orchestration: load cache → incremental fetch → save → pipeline |
-| `.gitignore` | Add `cache.json` |
-| `deno.json` | Add `--allow-write` to start task |
+| File            | Responsibility                                                                                    |
+| --------------- | ------------------------------------------------------------------------------------------------- |
+| `config.ts`     | Add `CACHE_PATH` constant                                                                         |
+| `cache.ts`      | **New** — load/save JSON cache, `CachedPullRequest` type                                          |
+| `cache_test.ts` | **New** — tests for cache module                                                                  |
+| `github.ts`     | Remove Web Cache API, add `states` param, add `fetchPullRequestsByNumber`, tag PRs with repo name |
+| `main.ts`       | New orchestration: load cache → incremental fetch → save → pipeline                               |
+| `.gitignore`    | Add `cache.json`                                                                                  |
+| `deno.json`     | Add `--allow-write` to start task                                                                 |
 
 ---
 
 ### Task 1: Project Setup
 
 **Files:**
+
 - Modify: `config.ts`
 - Modify: `.gitignore`
 - Modify: `deno.json`
@@ -63,8 +71,7 @@ to:
 
 - [ ] **Step 4: Verify**
 
-Run: `deno check config.ts`
-Expected: No errors.
+Run: `deno check config.ts` Expected: No errors.
 
 - [ ] **Step 5: Commit**
 
@@ -78,6 +85,7 @@ git commit -m "chore: add CACHE_PATH config, update gitignore and deno task"
 ### Task 2: Cache Module (TDD)
 
 **Files:**
+
 - Create: `cache.ts`
 - Create: `cache_test.ts`
 
@@ -190,8 +198,7 @@ describe("saveCache", () => {
 
 - [ ] **Step 3: Run tests to verify they fail**
 
-Run: `deno test cache_test.ts`
-Expected: All tests FAIL with "Not implemented".
+Run: `deno test cache_test.ts` Expected: All tests FAIL with "Not implemented".
 
 - [ ] **Step 4: Implement `cache.ts`**
 
@@ -231,8 +238,7 @@ export function saveCache(
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `deno test cache_test.ts`
-Expected: All tests PASS.
+Run: `deno test cache_test.ts` Expected: All tests PASS.
 
 - [ ] **Step 6: Commit**
 
@@ -245,14 +251,18 @@ git commit -m "feat: add JSON cache module with load/save/cacheKey"
 
 ### Task 3: Refactor `github.ts`
 
-Remove the Web Cache API, make PR states configurable, add a function to fetch individual PRs by number, and tag all returned PRs with their repo name.
+Remove the Web Cache API, make PR states configurable, add a function to fetch
+individual PRs by number, and tag all returned PRs with their repo name.
 
 **Files:**
+
 - Modify: `github.ts`
 
-- [ ] **Step 1: Extract PR fields into a shared constant and update the list query**
+- [ ] **Step 1: Extract PR fields into a shared constant and update the list
+      query**
 
-Replace the `PULL_REQUESTS_QUERY` constant (lines 71–100) with two constants — a shared fragment string and the list query that uses a `$states` variable:
+Replace the `PULL_REQUESTS_QUERY` constant (lines 71–100) with two constants — a
+shared fragment string and the list query that uses a `$states` variable:
 
 ```typescript
 const PR_FIELDS = `
@@ -293,7 +303,9 @@ const PULL_REQUESTS_QUERY = `
 
 - [ ] **Step 2: Remove Web Cache API code and simplify `graphql` helper**
 
-Replace the entire GraphQL helper section (lines 102–165, from `const CACHE_NAME` through the closing brace of `graphql()`) with a generic request function that takes a query string parameter:
+Replace the entire GraphQL helper section (lines 102–165, from
+`const CACHE_NAME` through the closing brace of `graphql()`) with a generic
+request function that takes a query string parameter:
 
 ```typescript
 async function graphqlRequest(
@@ -329,7 +341,8 @@ async function graphqlRequest(
 }
 ```
 
-- [ ] **Step 3: Update `fetchAllPagesForRepo` to accept `states` and tag PRs with repo**
+- [ ] **Step 3: Update `fetchAllPagesForRepo` to accept `states` and tag PRs
+      with repo**
 
 Replace the entire `fetchAllPagesForRepo` function with:
 
@@ -462,8 +475,9 @@ export async function fetchPullRequestsByNumber(
 
 - [ ] **Step 6: Verify type-check and existing tests pass**
 
-Run: `deno check github.ts && deno test`
-Expected: Type-check passes. All existing tests in `business-hours_test.ts`, `metrics_test.ts`, and `cache_test.ts` still pass.
+Run: `deno check github.ts && deno test` Expected: Type-check passes. All
+existing tests in `business-hours_test.ts`, `metrics_test.ts`, and
+`cache_test.ts` still pass.
 
 - [ ] **Step 7: Commit**
 
@@ -477,6 +491,7 @@ git commit -m "feat: remove web cache, add states param and fetchPullRequestsByN
 ### Task 4: Rewrite `main.ts` Orchestration
 
 **Files:**
+
 - Modify: `main.ts`
 
 - [ ] **Step 1: Replace the entire contents of `main.ts`**
@@ -486,10 +501,7 @@ import { load } from "@std/dotenv";
 import { Spinner } from "@std/cli/unstable-spinner";
 import { parseArgs } from "@std/cli/parse-args";
 import { CACHE_PATH, LOOKBACK_DAYS, REPOS } from "./config.ts";
-import {
-  fetchPullRequests,
-  fetchPullRequestsByNumber,
-} from "./github.ts";
+import { fetchPullRequests, fetchPullRequestsByNumber } from "./github.ts";
 import {
   computeStats,
   extractReviewWindows,
@@ -639,13 +651,11 @@ printStats(overall, perReviewerStats);
 
 - [ ] **Step 2: Type-check**
 
-Run: `deno check main.ts`
-Expected: No errors.
+Run: `deno check main.ts` Expected: No errors.
 
 - [ ] **Step 3: Run all tests**
 
-Run: `deno test`
-Expected: All tests pass (business-hours, metrics, cache).
+Run: `deno test` Expected: All tests pass (business-hours, metrics, cache).
 
 - [ ] **Step 4: Commit**
 
@@ -660,30 +670,34 @@ git commit -m "feat: rewrite main.ts with incremental JSON cache orchestration"
 
 - [ ] **Step 1: Delete any existing cache and run a full fetch**
 
-Run: `rm -f cache.json && deno run --allow-read --allow-write --allow-net --allow-env main.ts`
+Run:
+`rm -f cache.json && deno run --allow-read --allow-write --allow-net --allow-env main.ts`
 
-Expected: Spinner shows "Fetching all PRs... (0/3 repos)" progressing to (3/3). Output shows waiting PRs and stats. `cache.json` is created.
+Expected: Spinner shows "Fetching all PRs... (0/3 repos)" progressing to (3/3).
+Output shows waiting PRs and stats. `cache.json` is created.
 
 - [ ] **Step 2: Run again (incremental)**
 
 Run: `deno run --allow-read --allow-write --allow-net --allow-env main.ts`
 
-Expected: Spinner shows "Refreshing open PRs..." instead of "Fetching all PRs...". Output matches step 1. Should be noticeably faster.
+Expected: Spinner shows "Refreshing open PRs..." instead of "Fetching all
+PRs...". Output matches step 1. Should be noticeably faster.
 
 - [ ] **Step 3: Run with `--cached` (offline mode)**
 
-Run: `deno run --allow-read --allow-write --allow-net --allow-env main.ts --cached`
+Run:
+`deno run --allow-read --allow-write --allow-net --allow-env main.ts --cached`
 
 Expected: No spinner (no network calls). Output matches steps 1 and 2. Instant.
 
 - [ ] **Step 4: Verify stats match**
 
-Compare the output of all three runs. The waiting PRs and review stats should be identical (or near-identical if a PR changed state between runs).
+Compare the output of all three runs. The waiting PRs and review stats should be
+identical (or near-identical if a PR changed state between runs).
 
 - [ ] **Step 5: Format**
 
-Run: `deno fmt`
-Expected: No changes (or minor formatting fixes).
+Run: `deno fmt` Expected: No changes (or minor formatting fixes).
 
 - [ ] **Step 6: Final commit if needed**
 
