@@ -219,6 +219,22 @@ describe("extractReviewWindows", () => {
     assertEquals(windows[0].respondedBy, null);
   });
 
+  it("review request to non-team-member is ignored entirely", () => {
+    const pullRequest = makePR({
+      author: "someauthor",
+      timelineItems: [
+        {
+          __typename: "ReviewRequestedEvent",
+          createdAt: "2026-03-30T14:00:00Z",
+          requestedReviewer: { login: "external-contributor" },
+        },
+      ],
+    });
+
+    const windows = [...extractReviewWindows([pullRequest])];
+    assertEquals(windows.length, 0);
+  });
+
   it("open PR with pending request yields window with respondedAt null", () => {
     const pullRequest = makePR({
       author: "someauthor",

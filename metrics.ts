@@ -57,11 +57,15 @@ export function* extractReviewWindows(
 
     for (const item of sortedItems) {
       if (item.__typename === "ReviewRequestedEvent") {
-        // Only open a new window if none is currently open
+        // Only count review requests directed at a team member
+        const requestedLogin = item.requestedReviewer?.login;
+        if (!requestedLogin || !isTeamMember(requestedLogin)) {
+          continue;
+        }
+        // Only open a new window if none is currently open (de-duplicate)
         if (openWindowStart === null) {
           openWindowStart = Temporal.Instant.from(item.createdAt);
         }
-        // If window already open, ignore (de-duplicate)
         continue;
       }
 
