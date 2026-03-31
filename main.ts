@@ -21,7 +21,7 @@ if (!token) {
 }
 
 // Step 1: Load cache
-const cache = loadCache(CACHE_PATH);
+const cache = await loadCache(CACHE_PATH);
 
 // Step 2: Fetch from GitHub (unless --cached)
 if (!args.cached) {
@@ -114,7 +114,7 @@ if (!args.cached) {
   }
 
   // Step 3: Save cache
-  saveCache(CACHE_PATH, cache);
+  await saveCache(CACHE_PATH, cache);
 }
 
 // Step 4: Filter to lookback window and run pipeline

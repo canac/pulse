@@ -31,36 +31,36 @@ describe("cacheKey", () => {
 });
 
 describe("loadCache", () => {
-  it("returns empty map for nonexistent file", () => {
-    const cache = loadCache("/tmp/nonexistent-review-cache.json");
+  it("returns empty map for nonexistent file", async () => {
+    const cache = await loadCache("/tmp/nonexistent-review-cache.json");
     assertEquals(cache.size, 0);
   });
 
-  it("returns empty map for malformed JSON", () => {
-    const path = Deno.makeTempFileSync();
-    Deno.writeTextFileSync(path, "not valid json {{{");
-    const cache = loadCache(path);
+  it("returns empty map for malformed JSON", async () => {
+    const path = await Deno.makeTempFile();
+    await Deno.writeTextFile(path, "not valid json {{{");
+    const cache = await loadCache(path);
     assertEquals(cache.size, 0);
-    Deno.removeSync(path);
+    await Deno.remove(path);
   });
 
-  it("loads valid cache and keys by repo#number", () => {
-    const path = Deno.makeTempFileSync();
+  it("loads valid cache and keys by repo#number", async () => {
+    const path = await Deno.makeTempFile();
     const data = [makeCachedPR("mpdx-react", 42)];
-    Deno.writeTextFileSync(path, JSON.stringify(data));
+    await Deno.writeTextFile(path, JSON.stringify(data));
 
-    const cache = loadCache(path);
+    const cache = await loadCache(path);
 
     assertEquals(cache.size, 1);
     assertEquals(cache.has("mpdx-react#42"), true);
     assertEquals(cache.get("mpdx-react#42")!.title, "Test PR #42");
-    Deno.removeSync(path);
+    await Deno.remove(path);
   });
 });
 
 describe("saveCache", () => {
-  it("round-trips through loadCache", () => {
-    const path = Deno.makeTempFileSync();
+  it("round-trips through loadCache", async () => {
+    const path = await Deno.makeTempFile();
     const original = new Map<string, CachedPullRequest>();
     original.set("mpdx-react#42", makeCachedPR("mpdx-react", 42));
     original.set(
@@ -68,12 +68,12 @@ describe("saveCache", () => {
       makeCachedPR("staff_accounting_app", 10),
     );
 
-    saveCache(path, original);
-    const loaded = loadCache(path);
+    await saveCache(path, original);
+    const loaded = await loadCache(path);
 
     assertEquals(loaded.size, 2);
     assertEquals(loaded.get("mpdx-react#42")!.number, 42);
     assertEquals(loaded.get("staff_accounting_app#10")!.number, 10);
-    Deno.removeSync(path);
+    await Deno.remove(path);
   });
 });

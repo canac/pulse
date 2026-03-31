@@ -6,9 +6,11 @@ export function cacheKey(repo: string, number: number): string {
   return `${repo}#${number}`;
 }
 
-export function loadCache(path: string): Map<string, CachedPullRequest> {
+export async function loadCache(
+  path: string,
+): Promise<Map<string, CachedPullRequest>> {
   try {
-    const json = Deno.readTextFileSync(path);
+    const json = await Deno.readTextFile(path);
     const pullRequests: CachedPullRequest[] = JSON.parse(json);
     const cache = new Map<string, CachedPullRequest>();
     for (const pullRequest of pullRequests) {
@@ -20,10 +22,10 @@ export function loadCache(path: string): Map<string, CachedPullRequest> {
   }
 }
 
-export function saveCache(
+export async function saveCache(
   path: string,
   cache: Map<string, CachedPullRequest>,
-): void {
+): Promise<void> {
   const pullRequests = Array.from(cache.values());
-  Deno.writeTextFileSync(path, JSON.stringify(pullRequests));
+  await Deno.writeTextFile(path, JSON.stringify(pullRequests));
 }
