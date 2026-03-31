@@ -52,7 +52,7 @@ export function WaitingPage({ data }: PageProps<WaitingPageData>) {
             <div class="reviewer-header">
               <div
                 class="avatar"
-                style={`background: ${avatarColor(reviewer)}`}
+                style={`--avatar-color: ${avatarColor(reviewer)}`}
               >
                 {reviewer[0].toUpperCase()}
               </div>

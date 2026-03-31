@@ -96,7 +96,7 @@ function WeeklyChart({ trend }: { trend: WeekBucket[] }) {
                 <span class="bar-label">{formatHours(bucket.median)}</span>
                 <div
                   class={`bar-fill bg-${statusClass(bucket.median)}`}
-                  style={`height: ${heightPercent}%`}
+                  style={`--bar-height: ${heightPercent}%`}
                 />
               </div>
             );
@@ -145,7 +145,7 @@ function ReviewerRow({ detail }: { detail: ReviewerDetail }) {
         <div class="reviewer-cell">
           <div
             class="avatar-sm"
-            style={`background: ${avatarColor(detail.reviewer)}`}
+            style={`--avatar-color: ${avatarColor(detail.reviewer)}`}
           >
             {detail.reviewer[0].toUpperCase()}
           </div>
