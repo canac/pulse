@@ -62,6 +62,12 @@ function OverallStats({ overall }: { overall: Stats }) {
         </div>
       </div>
       <div class="stat-card">
+        <div class="stat-label">P75</div>
+        <div class={`stat-value status-${statusClass(overall.p75)}`}>
+          {formatHours(overall.p75)}
+        </div>
+      </div>
+      <div class="stat-card">
         <div class="stat-label">P90</div>
         <div class={`stat-value status-${statusClass(overall.p90)}`}>
           {formatHours(overall.p90)}
@@ -127,6 +133,7 @@ function ReviewerTable(
         <div class="table-header">
           <div>Reviewer</div>
           <div>Median</div>
+          <div>P75</div>
           <div>P90</div>
           <div>Count</div>
         </div>
@@ -154,6 +161,9 @@ function ReviewerRow({ detail }: { detail: ReviewerDetail }) {
         </div>
         <div class={`status-${statusClass(detail.stats.median)}`}>
           {formatHours(detail.stats.median)}
+        </div>
+        <div class={`status-${statusClass(detail.stats.p75)}`}>
+          {formatHours(detail.stats.p75)}
         </div>
         <div class={`status-${statusClass(detail.stats.p90)}`}>
           {formatHours(detail.stats.p90)}

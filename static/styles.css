@@ -285,7 +285,7 @@ a {
 
 .table-header {
   display: grid;
-  grid-template-columns: 1fr 80px 80px 60px;
+  grid-template-columns: 1fr 80px 80px 80px 60px;
   padding: 12px 16px;
   background: var(--bg-header);
   font-size: 12px;
@@ -309,7 +309,7 @@ details.reviewer-row:last-child {
 
 details.reviewer-row > summary {
   display: grid;
-  grid-template-columns: 1fr 80px 80px 60px;
+  grid-template-columns: 1fr 80px 80px 80px 60px;
   padding: 14px 16px;
   align-items: center;
   cursor: pointer;

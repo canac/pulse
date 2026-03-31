@@ -63,9 +63,9 @@ export function printStats(
   }
 
   console.log(
-    `  Overall: median ${formatHours(overall.median)}, P90 ${
-      formatHours(overall.p90)
-    } (${overall.count} reviews)`,
+    `  Overall: median ${formatHours(overall.median)}, P75 ${
+      formatHours(overall.p75)
+    }, P90 ${formatHours(overall.p90)} (${overall.count} reviews)`,
   );
   console.log();
 
@@ -79,6 +79,8 @@ export function printStats(
       console.log(
         `    @${reviewer} — ${
           colorize(stats.median, `median ${formatHours(stats.median)}`)
+        }, ${
+          colorize(stats.p75, `P75 ${formatHours(stats.p75)}`)
         }, ${
           colorize(stats.p90, `P90 ${formatHours(stats.p90)}`)
         } (${stats.count} reviews)`,
