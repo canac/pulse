@@ -32,19 +32,23 @@ collect & compute stats ──> output
 
 ```
 review-dashboard/
-├── deno.json            # tasks, import map
-├── main.ts              # entry point — orchestrates the pipeline
-├── config.ts            # hardcoded team members, repos, constants
-├── github.ts            # GraphQL client, queries, Zod schemas
-├── business-hours.ts    # business-hours elapsed time calculator
-├── metrics.ts           # review window extraction, median/P90 stats
-└── output.ts            # colored/emoji CLI output formatting
+├── deno.json                  # tasks, import map
+├── main.ts                    # entry point — orchestrates the pipeline
+├── config.ts                  # hardcoded team members, repos, constants
+├── github.ts                  # GraphQL client, queries, Zod schemas
+├── business-hours.ts          # business-hours elapsed time calculator
+├── business-hours_test.ts     # tests for business hours logic
+├── metrics.ts                 # review window extraction, median/P90 stats
+├── metrics_test.ts            # tests for review window extraction & stats
+└── output.ts                  # colored/emoji CLI output formatting
 ```
 
 ## Dependencies
 
 - `zod` — validate GitHub API response shapes and derive TypeScript types
 - `@std/fmt/colors` — ANSI terminal colors (Deno standard library)
+- `@std/testing` — test runner (BDD-style with `describe`/`it`)
+- `@std/assert` — test assertions (`assertEquals`, `assertAlmostEquals`, etc.)
 - `Temporal` API — timezone-aware date/time (built into Deno, no import needed)
 
 ## Config (`config.ts`)
@@ -259,11 +263,39 @@ Per reviewer (first responder):
 - Under 6 business hours: `"2.3h"`
 - 6+ business hours: `"1d 2.3h"` (where 1 day = 6 business hours)
 
+## Testing
+
+Uses `@std/testing` (BDD-style `describe`/`it`) and `@std/assert`. Run with `deno test`.
+
+### `business-hours_test.ts`
+
+- Same business day (e.g., Monday 11am → Monday 2pm = 3h)
+- Across a single night (Monday 3pm → Tuesday 11am = 2h)
+- Across a weekend (Friday 2pm → Monday 11am = 3h)
+- Start outside business hours — before open (Monday 8am → Monday 2pm = 4h)
+- Start outside business hours — after close (Monday 5pm → Tuesday 11am = 1h)
+- Start on weekend (Saturday 12pm → Monday 2pm = 4h)
+- End outside business hours — clamped back (Monday 10am → Monday 7pm = 6h)
+- Multi-day span (Monday 10am → Wednesday 4pm = 18h)
+- Zero elapsed (both times on weekend = 0h)
+- DST spring-forward transition
+
+### `metrics_test.ts`
+
+- Single PR, single review request, single review → one closed window with correct timing
+- Multiple review requests before response → de-duplicated to one window
+- Multiple review cycles (request → review → re-request → review) → two windows
+- Comment from team member counts as review response
+- Comment from PR author does not close window
+- Comment from non-team-member does not close window
+- Open PR with pending review request → open window with `respondedAt: null`
+- Median and P90 calculations with known values
+
 ## Verification
 
-1. Run `deno run --allow-net --allow-env main.ts` with a valid `GITHUB_TOKEN`
-2. Verify it fetches PRs from configured repos
-3. Verify waiting PRs are listed with correct business-hours wait times
-4. Verify historical stats show median/P90 per reviewer
-5. Manually check a few PRs against GitHub UI to confirm timeline event parsing is correct
-6. Test business-hours calculator with unit tests covering: same-day, cross-weekend, outside-hours, DST edge cases
+1. Run `deno test` — all tests pass
+2. Run `deno run --allow-net --allow-env main.ts` with a valid `GITHUB_TOKEN`
+3. Verify it fetches PRs from configured repos
+4. Verify waiting PRs are listed with correct business-hours wait times
+5. Verify historical stats show median/P90 per reviewer
+6. Manually check a few PRs against GitHub UI to confirm timeline event parsing is correct
