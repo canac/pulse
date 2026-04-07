@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { REPOS } from "./config.ts";
+import { LOOKBACK_DAYS, REPOS } from "./config.ts";
 import {
   type FetchPagesResult,
   fetchPullRequests,
@@ -68,9 +68,18 @@ async function ingestNewPRs(
   database: DatabaseSync,
   results: Map<string, FetchPagesResult>,
 ): Promise<void> {
+  const since = Temporal.Now.instant().subtract({
+    hours: LOOKBACK_DAYS * 24,
+  });
+
   for (const [repo, result] of results) {
     for (const pullRequest of result.pullRequests) {
       if (pullRequest.isDraft) {
+        continue;
+      }
+
+      const prCreatedAt = Temporal.Instant.from(pullRequest.createdAt);
+      if (Temporal.Instant.compare(prCreatedAt, since) < 0) {
         continue;
       }
 
