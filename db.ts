@@ -243,14 +243,14 @@ export function updateTimelineCursor(
 
 export function getLastFetchedAt(database: DatabaseSync): Date | null {
   const row = database.prepare(
-    "SELECT value FROM metadata WHERE key = 'lastFetchedAt'",
+    "SELECT value FROM metadata WHERE key = 'last_fetched_at'",
   ).get() as { value: string } | undefined;
   return row ? new Date(row.value) : null;
 }
 
 export function setLastFetchedAt(database: DatabaseSync, date: Date): void {
   database.prepare(`
-    INSERT INTO metadata (key, value) VALUES ('lastFetchedAt', ?)
+    INSERT INTO metadata (key, value) VALUES ('last_fetched_at', ?)
     ON CONFLICT (key) DO UPDATE SET value = excluded.value
   `).run(date.toISOString());
 }
