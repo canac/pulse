@@ -1,130 +1,9 @@
-import { TEAM_MEMBERS } from "./config.ts";
-import { businessHoursElapsed } from "./business-hours.ts";
-import type { PullRequest } from "./github.ts";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export interface ReviewWindow {
-  pr: { number: number; title: string; url: string; author: string };
-  requestedAt: Temporal.Instant;
-  respondedAt: Temporal.Instant | null;
-  respondedBy: string | null;
-  requestedReviewers: string[];
-  businessHours: number;
-}
-
 export interface Stats {
   median: number;
   p75: number;
   p90: number;
   count: number;
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const TEAM_MEMBER_SET = new Set<string>(TEAM_MEMBERS);
-
-// ---------------------------------------------------------------------------
-// extractReviewWindows
-// ---------------------------------------------------------------------------
-
-export function* extractReviewWindows(
-  prs: Iterable<PullRequest>,
-): Generator<ReviewWindow> {
-  for (const pullRequest of prs) {
-    const prAuthor = pullRequest.author?.login ?? "";
-    const prInfo = {
-      number: pullRequest.number,
-      title: pullRequest.title,
-      url: pullRequest.url,
-      author: prAuthor,
-    };
-
-    // Sort timeline items by createdAt ascending
-    const sortedItems = pullRequest.timelineItems.nodes.toSorted(
-      (itemA, itemB) => {
-        const instantA = Temporal.Instant.from(itemA.createdAt);
-        const instantB = Temporal.Instant.from(itemB.createdAt);
-        return Temporal.Instant.compare(instantA, instantB);
-      },
-    );
-
-    let openWindowStart: Temporal.Instant | null = null;
-    let windowReviewers: string[] = [];
-
-    for (const item of sortedItems) {
-      if (item.__typename === "ReviewRequestedEvent") {
-        // Only count review requests directed at a team member
-        const requestedLogin = item.requestedReviewer?.login;
-        if (!requestedLogin || !TEAM_MEMBER_SET.has(requestedLogin)) {
-          continue;
-        }
-        // Only open a new window if none is currently open (de-duplicate)
-        if (openWindowStart === null) {
-          openWindowStart = Temporal.Instant.from(item.createdAt);
-        }
-        if (!windowReviewers.includes(requestedLogin)) {
-          windowReviewers.push(requestedLogin);
-        }
-        continue;
-      }
-
-      if (
-        item.__typename === "PullRequestReview" ||
-        item.__typename === "IssueComment"
-      ) {
-        // Ignore if no window is open
-        if (openWindowStart === null) {
-          continue;
-        }
-
-        const responderLogin = item.author?.login ?? "";
-
-        // Ignore responses from the PR author or non-team members
-        if (
-          responderLogin === prAuthor || !TEAM_MEMBER_SET.has(responderLogin)
-        ) {
-          continue;
-        }
-
-        // Close the window and yield it
-        const respondedAt = Temporal.Instant.from(item.createdAt);
-        yield {
-          pr: prInfo,
-          requestedAt: openWindowStart,
-          respondedAt,
-          respondedBy: responderLogin,
-          requestedReviewers: windowReviewers,
-          businessHours: businessHoursElapsed(openWindowStart, respondedAt),
-        };
-
-        openWindowStart = null;
-        windowReviewers = [];
-      }
-    }
-
-    // If window still open and PR is still open, yield as pending (waiting)
-    if (openWindowStart !== null && pullRequest.state === "OPEN") {
-      const nowInstant = Temporal.Now.instant();
-      yield {
-        pr: prInfo,
-        requestedAt: openWindowStart,
-        respondedAt: null,
-        respondedBy: null,
-        requestedReviewers: windowReviewers,
-        businessHours: businessHoursElapsed(openWindowStart, nowInstant),
-      };
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// computeStats
-// ---------------------------------------------------------------------------
 
 export function computeStats(values: number[]): Stats {
   if (values.length === 0) {
@@ -134,13 +13,11 @@ export function computeStats(values: number[]): Stats {
   const sorted = values.toSorted((numA, numB) => numA - numB);
   const count = sorted.length;
 
-  // Compute median
   const midIndex = Math.floor(count / 2);
   const median = count % 2 === 1
     ? sorted[midIndex]
     : (sorted[midIndex - 1] + sorted[midIndex]) / 2;
 
-  // Compute P75 and P90 (nearest-rank method)
   const p75Index = Math.floor((count - 1) * 0.75);
   const p75 = sorted[p75Index];
   const p90Index = Math.floor((count - 1) * 0.9);

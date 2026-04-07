@@ -5,9 +5,9 @@ import {
   computeWeeklyTrend,
   groupWaitingByReviewer,
 } from "./web-data.ts";
-import type { ReviewWindow } from "./metrics.ts";
+import type { ReviewWindowView } from "./db.ts";
 
-function makeWindow(overrides: Partial<ReviewWindow> = {}): ReviewWindow {
+function makeWindow(overrides: Partial<ReviewWindowView> = {}): ReviewWindowView {
   return {
     pr: {
       number: 1,
@@ -15,6 +15,7 @@ function makeWindow(overrides: Partial<ReviewWindow> = {}): ReviewWindow {
       url: "https://github.com/CruGlobal/repo/pull/1",
       author: "author",
     },
+    repo: "mpdx-react",
     requestedAt: Temporal.Instant.from("2026-03-30T14:00:00Z"),
     respondedAt: Temporal.Instant.from("2026-03-30T15:00:00Z"),
     respondedBy: "canac",

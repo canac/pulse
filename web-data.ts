@@ -1,10 +1,11 @@
-import { computeStats, type ReviewWindow, type Stats } from "./metrics.ts";
+import { computeStats, type Stats } from "./metrics.ts";
 import { BUSINESS_HOURS } from "./config.ts";
+import type { ReviewWindowView } from "./db.ts";
 
 export function groupWaitingByReviewer(
-  windows: ReviewWindow[],
-): Map<string, ReviewWindow[]> {
-  const byReviewer = new Map<string, ReviewWindow[]>();
+  windows: ReviewWindowView[],
+): Map<string, ReviewWindowView[]> {
+  const byReviewer = new Map<string, ReviewWindowView[]>();
 
   for (const window of windows) {
     if (window.respondedAt !== null) {
@@ -31,7 +32,7 @@ export interface WeekBucket {
   median: number;
 }
 
-export function computeWeeklyTrend(windows: ReviewWindow[]): WeekBucket[] {
+export function computeWeeklyTrend(windows: ReviewWindowView[]): WeekBucket[] {
   const buckets = new Map<string, number[]>();
 
   for (const window of windows) {
@@ -62,13 +63,13 @@ export function computeWeeklyTrend(windows: ReviewWindow[]): WeekBucket[] {
 export interface ReviewerDetail {
   reviewer: string;
   stats: Stats;
-  windows: ReviewWindow[];
+  windows: ReviewWindowView[];
 }
 
 export function computeReviewerDetails(
-  windows: ReviewWindow[],
+  windows: ReviewWindowView[],
 ): ReviewerDetail[] {
-  const byReviewer = new Map<string, ReviewWindow[]>();
+  const byReviewer = new Map<string, ReviewWindowView[]>();
 
   for (const window of windows) {
     if (window.respondedAt === null || !window.respondedBy) {

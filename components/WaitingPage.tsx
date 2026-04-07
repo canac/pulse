@@ -1,9 +1,9 @@
 import { Layout } from "./Layout.tsx";
-import type { ReviewWindow } from "../metrics.ts";
+import type { ReviewWindowView } from "../db.ts";
 import { TEAM_MEMBERS, THRESHOLDS } from "../config.ts";
 
 interface WaitingPageData {
-  waitingByReviewer: Map<string, ReviewWindow[]>;
+  waitingByReviewer: Map<string, ReviewWindowView[]>;
   lastUpdated: Date | null;
 }
 
