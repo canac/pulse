@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { LOOKBACK_DAYS, REPOS } from "./config.ts";
+import { LOOKBACK_DAYS, REPOS, TEAM_MEMBERS } from "./config.ts";
 import {
   type FetchPagesResult,
   fetchPullRequests,
@@ -71,9 +71,15 @@ async function ingestNewPRs(
   const since = Temporal.Now.instant().subtract({
     hours: LOOKBACK_DAYS * 24,
   });
+  const teamMemberSet = new Set<string>(TEAM_MEMBERS);
 
   for (const [repo, result] of results) {
     for (const pullRequest of result.pullRequests) {
+      const authorLogin = pullRequest.author?.login;
+      if (!authorLogin || !teamMemberSet.has(authorLogin)) {
+        continue;
+      }
+
       if (pullRequest.isDraft) {
         continue;
       }
