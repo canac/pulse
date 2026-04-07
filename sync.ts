@@ -6,6 +6,7 @@ import {
   fetchTimeline,
 } from "./github.ts";
 import {
+  getAllRepoCursors,
   getOpenPullRequests,
   getRepoCursor,
   type PullRequestRow,
@@ -135,10 +136,10 @@ export async function incrementalRefresh(
   database: DatabaseSync,
 ): Promise<void> {
   const newPRs = async () => {
-    const cursors = new Map<string, string | null>();
-    for (const repo of REPOS) {
-      cursors.set(repo, getRepoCursor(database, repo));
-    }
+    const allCursors = getAllRepoCursors(database);
+    const cursors = new Map<string, string | null>(
+      REPOS.map((repo) => [repo, allCursors.get(repo) ?? null]),
+    );
     const results = await fetchPullRequests(token, { cursors });
     await ingestNewPRs(token, database, results);
   };

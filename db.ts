@@ -217,6 +217,15 @@ export function getRepoCursor(
   return row?.prs_cursor ?? null;
 }
 
+export function getAllRepoCursors(
+  database: DatabaseSync,
+): Map<string, string> {
+  const rows = database.prepare(
+    "SELECT repo, prs_cursor FROM repo_cursors",
+  ).all() as { repo: string; prs_cursor: string }[];
+  return new Map(rows.map((row) => [row.repo, row.prs_cursor]));
+}
+
 export function setRepoCursor(
   database: DatabaseSync,
   repo: string,
