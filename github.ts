@@ -201,7 +201,6 @@ export async function fetchPullRequests(
   token: string,
   options: {
     states?: ("OPEN" | "MERGED" | "CLOSED")[];
-    onRepoComplete?: () => void;
   } = {},
 ): Promise<Array<PullRequest & { repo: string }>> {
   const since = Temporal.Now.instant().subtract({ hours: LOOKBACK_DAYS * 24 });
@@ -215,7 +214,6 @@ export async function fetchPullRequests(
         since,
         states,
       );
-      options.onRepoComplete?.();
       return pullRequests;
     }),
   );
