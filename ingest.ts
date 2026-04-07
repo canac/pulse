@@ -8,9 +8,7 @@ import {
   insertReview,
 } from "./db.ts";
 
-function isTeamMember(login: string): boolean {
-  return (TEAM_MEMBERS as readonly string[]).includes(login);
-}
+const TEAM_MEMBER_SET = new Set<string>(TEAM_MEMBERS);
 
 export function ingestTimelineEvents(
   database: DatabaseSync,
@@ -25,7 +23,7 @@ export function ingestTimelineEvents(
 
     if (event.__typename === "ReviewRequestedEvent") {
       const reviewerLogin = event.requestedReviewer?.login;
-      if (!reviewerLogin || !isTeamMember(reviewerLogin)) {
+      if (!reviewerLogin || !TEAM_MEMBER_SET.has(reviewerLogin)) {
         continue;
       }
 
@@ -48,7 +46,7 @@ export function ingestTimelineEvents(
       }
 
       const authorLogin = event.author?.login;
-      if (!authorLogin || authorLogin === prAuthor || !isTeamMember(authorLogin)) {
+      if (!authorLogin || authorLogin === prAuthor || !TEAM_MEMBER_SET.has(authorLogin)) {
         continue;
       }
 
