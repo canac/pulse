@@ -20,7 +20,7 @@ let lastFetchedAt = 0;
 
 async function backgroundRefresh(): Promise<void> {
   try {
-    const token = await getToken();
+    const token = getToken();
     const cache = await loadCache();
 
     if (cache.size === 0) {
