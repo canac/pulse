@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GITHUB_ORG, LOOKBACK_DAYS, REPOS } from "./config.ts";
+import { GITHUB_ORG, REPOS } from "./config.ts";
 
 // ---------------------------------------------------------------------------
 // Zod Schemas
@@ -34,17 +34,14 @@ const TimelineItemSchema = z.discriminatedUnion("__typename", [
 ]);
 
 const PullRequestSchema = z.object({
+  id: z.string(),
   number: z.number(),
   title: z.string(),
   url: z.string(),
   createdAt: z.string(),
-
   isDraft: z.boolean(),
   state: z.enum(["OPEN", "MERGED", "CLOSED"]),
   author: ActorSchema,
-  timelineItems: z.object({
-    nodes: z.array(TimelineItemSchema),
-  }),
 });
 
 const QueryResponseSchema = z.object({
@@ -61,28 +58,33 @@ const QueryResponseSchema = z.object({
   }),
 });
 
+const TimelineResponseSchema = z.object({
+  data: z.object({
+    node: z.object({
+      title: z.string(),
+      state: z.enum(["OPEN", "MERGED", "CLOSED"]),
+      isDraft: z.boolean(),
+      timelineItems: z.object({
+        pageInfo: z.object({
+          hasNextPage: z.boolean(),
+          endCursor: z.string().nullable(),
+        }),
+        nodes: z.array(TimelineItemSchema),
+      }),
+    }),
+  }),
+});
+
 export type PullRequest = z.infer<typeof PullRequestSchema>;
 export type TimelineItem = z.infer<typeof TimelineItemSchema>;
 
 // ---------------------------------------------------------------------------
-// GraphQL Query
+// GraphQL Queries
 // ---------------------------------------------------------------------------
 
 const PR_FIELDS = `
-  number title url createdAt isDraft state
+  id number title url createdAt isDraft state
   author { login }
-  timelineItems(first: 100, itemTypes: [
-    REVIEW_REQUESTED_EVENT
-    PULL_REQUEST_REVIEW
-    ISSUE_COMMENT
-  ]) {
-    nodes {
-      __typename
-      ... on ReviewRequestedEvent { createdAt requestedReviewer { ... on User { login } } }
-      ... on PullRequestReview { createdAt author { login } }
-      ... on IssueComment { createdAt author { login } }
-    }
-  }
 `;
 
 const PULL_REQUESTS_QUERY = `
@@ -92,11 +94,36 @@ const PULL_REQUESTS_QUERY = `
         first: 100
         after: $cursor
         states: $states
-        orderBy: { field: CREATED_AT, direction: DESC }
+        orderBy: { field: CREATED_AT, direction: ASC }
       ) {
         pageInfo { hasNextPage endCursor }
         nodes {
           ${PR_FIELDS}
+        }
+      }
+    }
+  }
+`;
+
+const TIMELINE_QUERY = `
+  query($nodeId: ID!, $cursor: String) {
+    node(id: $nodeId) {
+      ... on PullRequest {
+        title
+        state
+        isDraft
+        timelineItems(
+          first: 100
+          after: $cursor
+          itemTypes: [REVIEW_REQUESTED_EVENT PULL_REQUEST_REVIEW ISSUE_COMMENT]
+        ) {
+          pageInfo { hasNextPage endCursor }
+          nodes {
+            __typename
+            ... on ReviewRequestedEvent { createdAt requestedReviewer { ... on User { login } } }
+            ... on PullRequestReview { createdAt author { login } }
+            ... on IssueComment { createdAt author { login } }
+          }
         }
       }
     }
@@ -143,14 +170,19 @@ async function graphqlRequest(
 // Fetch helpers
 // ---------------------------------------------------------------------------
 
+export interface FetchPagesResult {
+  pullRequests: Array<PullRequest & { repo: string }>;
+  endCursor: string | null;
+}
+
 async function fetchAllPagesForRepo(
   token: string,
   repoName: string,
-  since: Temporal.Instant,
   states: ("OPEN" | "MERGED" | "CLOSED")[],
-): Promise<Array<PullRequest & { repo: string }>> {
+  startCursor: string | null,
+): Promise<FetchPagesResult> {
   const pullRequests: Array<PullRequest & { repo: string }> = [];
-  let cursor: string | null = null;
+  let cursor = startCursor;
 
   while (true) {
     const json = await graphqlRequest(token, PULL_REQUESTS_QUERY, {
@@ -163,28 +195,18 @@ async function fetchAllPagesForRepo(
     const { pullRequests: pullRequestsPage } = QueryResponseSchema.parse(json)
       .data.repository;
 
-    let reachedOldPR = false;
     for (const pullRequest of pullRequestsPage.nodes) {
-      if (pullRequest.isDraft) {
-        continue;
-      }
-
-      const prCreatedAt = Temporal.Instant.from(pullRequest.createdAt);
-      if (Temporal.Instant.compare(prCreatedAt, since) < 0) {
-        reachedOldPR = true;
-        break;
-      }
-
       pullRequests.push({ ...pullRequest, repo: repoName });
     }
 
-    if (reachedOldPR || !pullRequestsPage.pageInfo.hasNextPage) {
+    cursor = pullRequestsPage.pageInfo.endCursor;
+
+    if (!pullRequestsPage.pageInfo.hasNextPage) {
       break;
     }
-    cursor = pullRequestsPage.pageInfo.endCursor;
   }
 
-  return pullRequests;
+  return { pullRequests, endCursor: cursor };
 }
 
 // ---------------------------------------------------------------------------
@@ -201,66 +223,57 @@ export async function fetchPullRequests(
   token: string,
   options: {
     states?: ("OPEN" | "MERGED" | "CLOSED")[];
+    cursors?: Map<string, string | null>;
   } = {},
-): Promise<Array<PullRequest & { repo: string }>> {
-  const since = Temporal.Now.instant().subtract({ hours: LOOKBACK_DAYS * 24 });
+): Promise<Map<string, FetchPagesResult>> {
   const states = options.states ?? ALL_STATES;
+  const cursors = options.cursors ?? new Map();
 
-  const results = await Promise.all(
-    REPOS.map(async (repoName) => {
-      const pullRequests = await fetchAllPagesForRepo(
-        token,
-        repoName,
-        since,
-        states,
-      );
-      return pullRequests;
-    }),
-  );
+  const results = new Map<string, FetchPagesResult>();
 
-  return results.flat();
-}
-
-export async function fetchPullRequestsByNumber(
-  token: string,
-  repo: string,
-  prNumbers: number[],
-): Promise<Array<PullRequest & { repo: string }>> {
-  if (prNumbers.length === 0) {
-    return [];
-  }
-
-  const prQueries = prNumbers
-    .map((num) => `pr_${num}: pullRequest(number: ${num}) { ${PR_FIELDS} }`)
-    .join("\n    ");
-
-  const query = `
-    query($owner: String!, $name: String!) {
-      repository(owner: $owner, name: $name) {
-        ${prQueries}
-      }
-    }
-  `;
-
-  const json = await graphqlRequest(token, query, {
-    owner: GITHUB_ORG,
-    name: repo,
+  const fetches = REPOS.map(async (repoName) => {
+    const startCursor = cursors.get(repoName) ?? null;
+    const result = await fetchAllPagesForRepo(
+      token,
+      repoName,
+      states,
+      startCursor,
+    );
+    results.set(repoName, result);
   });
 
-  const data = json as { data?: { repository?: Record<string, unknown> } };
-  const repository = data.data?.repository;
-  if (!repository) {
-    return [];
-  }
+  await Promise.all(fetches);
+  return results;
+}
 
-  const pullRequests: Array<PullRequest & { repo: string }> = [];
-  for (const num of prNumbers) {
-    const prData = repository[`pr_${num}`];
-    if (prData) {
-      const parsed = PullRequestSchema.parse(prData);
-      pullRequests.push({ ...parsed, repo });
-    }
-  }
+export interface TimelineResult {
+  title: string;
+  state: "OPEN" | "MERGED" | "CLOSED";
+  isDraft: boolean;
+  events: TimelineItem[];
+  endCursor: string | null;
+  hasNextPage: boolean;
+}
 
-  return pullRequests;
+export async function fetchTimeline(
+  token: string,
+  nodeId: string,
+  cursor: string | null,
+): Promise<TimelineResult> {
+  const json = await graphqlRequest(token, TIMELINE_QUERY, {
+    nodeId,
+    cursor,
+  });
+
+  const parsed = TimelineResponseSchema.parse(json);
+  const { title, state, isDraft, timelineItems } = parsed.data.node;
+
+  return {
+    title,
+    state,
+    isDraft,
+    events: timelineItems.nodes,
+    endCursor: timelineItems.pageInfo.endCursor,
+    hasNextPage: timelineItems.pageInfo.hasNextPage,
+  };
 }
