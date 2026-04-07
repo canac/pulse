@@ -1,6 +1,6 @@
 import { describe, it } from "@std/testing/bdd";
 import { assertEquals, assertNotEquals } from "@std/assert";
-import { DatabaseSync } from "node:sqlite";
+import { createClient, type Client } from "@libsql/client";
 import {
   addReviewRequestedReviewer,
   completeReview,
@@ -17,14 +17,14 @@ import {
   upsertPullRequest,
 } from "./db.ts";
 
-function createTestDb(): DatabaseSync {
-  const database = new DatabaseSync(":memory:");
-  createSchema(database);
-  return database;
+async function createTestDb(): Promise<Client> {
+  const client = createClient({ url: ":memory:" });
+  await createSchema(client);
+  return client;
 }
 
-function insertTestPR(
-  database: DatabaseSync,
+async function insertTestPR(
+  client: Client,
   overrides: Partial<{
     repo: string;
     number: number;
@@ -36,8 +36,8 @@ function insertTestPR(
     isDraft: boolean;
     createdAt: string;
   }> = {},
-): void {
-  upsertPullRequest(database, {
+): Promise<void> {
+  await upsertPullRequest(client, {
     repo: overrides.repo ?? "org/repo",
     number: overrides.number ?? 1,
     nodeId: overrides.nodeId ?? "NODE_1",
@@ -51,12 +51,12 @@ function insertTestPR(
 }
 
 describe("createSchema", () => {
-  it("creates all 5 tables", () => {
-    const database = createTestDb();
-    const tables = database.prepare(
+  it("creates all 5 tables", async () => {
+    const client = await createTestDb();
+    const result = await client.execute(
       "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
-    ).all() as Array<{ name: string }>;
-    const tableNames = tables.map((row) => row.name);
+    );
+    const tableNames = result.rows.map((row) => row.name as string);
     assertEquals(tableNames.includes("pull_requests"), true);
     assertEquals(tableNames.includes("reviews"), true);
     assertEquals(tableNames.includes("review_requested_reviewers"), true);
@@ -64,80 +64,74 @@ describe("createSchema", () => {
     assertEquals(tableNames.includes("metadata"), true);
   });
 
-  it("is idempotent", () => {
-    const database = new DatabaseSync(":memory:");
-    createSchema(database);
-    createSchema(database);
+  it("is idempotent", async () => {
+    const client = createClient({ url: ":memory:" });
+    await createSchema(client);
+    await createSchema(client);
     // No error means success
   });
 });
 
 describe("upsertPullRequest", () => {
-  it("inserts a new pull request", () => {
-    const database = createTestDb();
-    insertTestPR(database);
-    const rows = database.prepare("SELECT * FROM pull_requests").all() as Array<
-      Record<string, unknown>
-    >;
-    assertEquals(rows.length, 1);
-    assertEquals(rows[0].repo, "org/repo");
-    assertEquals(rows[0].number, 1);
-    assertEquals(rows[0].title, "Test PR");
-    assertEquals(rows[0].is_draft, 0);
+  it("inserts a new pull request", async () => {
+    const client = await createTestDb();
+    await insertTestPR(client);
+    const result = await client.execute("SELECT * FROM pull_requests");
+    assertEquals(result.rows.length, 1);
+    assertEquals(result.rows[0].repo, "org/repo");
+    assertEquals(result.rows[0].number, 1);
+    assertEquals(result.rows[0].title, "Test PR");
+    assertEquals(result.rows[0].is_draft, 0);
   });
 
-  it("updates mutable fields on conflict", () => {
-    const database = createTestDb();
-    insertTestPR(database, { title: "Original Title", state: "OPEN", isDraft: false });
-    insertTestPR(database, { title: "Updated Title", state: "CLOSED", isDraft: true });
+  it("updates mutable fields on conflict", async () => {
+    const client = await createTestDb();
+    await insertTestPR(client, { title: "Original Title", state: "OPEN", isDraft: false });
+    await insertTestPR(client, { title: "Updated Title", state: "CLOSED", isDraft: true });
 
-    const rows = database.prepare("SELECT * FROM pull_requests").all() as Array<
-      Record<string, unknown>
-    >;
-    assertEquals(rows.length, 1);
-    assertEquals(rows[0].title, "Updated Title");
-    assertEquals(rows[0].state, "CLOSED");
-    assertEquals(rows[0].is_draft, 1);
+    const result = await client.execute("SELECT * FROM pull_requests");
+    assertEquals(result.rows.length, 1);
+    assertEquals(result.rows[0].title, "Updated Title");
+    assertEquals(result.rows[0].state, "CLOSED");
+    assertEquals(result.rows[0].is_draft, 1);
     // Immutable fields should not change
-    assertEquals(rows[0].author, "alice");
-    assertEquals(rows[0].node_id, "NODE_1");
+    assertEquals(result.rows[0].author, "alice");
+    assertEquals(result.rows[0].node_id, "NODE_1");
   });
 
-  it("stores isDraft as integer", () => {
-    const database = createTestDb();
-    insertTestPR(database, { isDraft: true });
-    const row = database.prepare("SELECT is_draft FROM pull_requests").get() as {
-      is_draft: number;
-    };
-    assertEquals(row.is_draft, 1);
+  it("stores isDraft as integer", async () => {
+    const client = await createTestDb();
+    await insertTestPR(client, { isDraft: true });
+    const result = await client.execute("SELECT is_draft FROM pull_requests");
+    assertEquals(result.rows[0].is_draft, 1);
   });
 });
 
 describe("getOpenPullRequests", () => {
-  it("returns only OPEN pull requests", () => {
-    const database = createTestDb();
-    insertTestPR(database, { number: 1, state: "OPEN" });
-    insertTestPR(database, { number: 2, state: "CLOSED" });
-    insertTestPR(database, { number: 3, state: "MERGED" });
-    insertTestPR(database, { number: 4, state: "OPEN" });
+  it("returns only OPEN pull requests", async () => {
+    const client = await createTestDb();
+    await insertTestPR(client, { number: 1, state: "OPEN" });
+    await insertTestPR(client, { number: 2, state: "CLOSED" });
+    await insertTestPR(client, { number: 3, state: "MERGED" });
+    await insertTestPR(client, { number: 4, state: "OPEN" });
 
-    const openPRs = getOpenPullRequests(database);
+    const openPRs = await getOpenPullRequests(client);
     assertEquals(openPRs.length, 2);
-    assertEquals(openPRs.map((pr) => pr.number).sort(), [1, 4]);
+    assertEquals(openPRs.map((pr) => pr.number as number).sort(), [1, 4]);
   });
 
-  it("returns empty array when no open PRs", () => {
-    const database = createTestDb();
-    insertTestPR(database, { state: "CLOSED" });
-    assertEquals(getOpenPullRequests(database).length, 0);
+  it("returns empty array when no open PRs", async () => {
+    const client = await createTestDb();
+    await insertTestPR(client, { state: "CLOSED" });
+    assertEquals((await getOpenPullRequests(client)).length, 0);
   });
 });
 
 describe("review CRUD", () => {
-  it("inserts a review and returns lastInsertRowid", () => {
-    const database = createTestDb();
-    insertTestPR(database);
-    const reviewId = insertReview(database, {
+  it("inserts a review and returns lastInsertRowid", async () => {
+    const client = await createTestDb();
+    await insertTestPR(client);
+    const reviewId = await insertReview(client, {
       repo: "org/repo",
       prNumber: 1,
       requestedAt: "2026-04-01T13:00:00Z",
@@ -146,136 +140,138 @@ describe("review CRUD", () => {
     assertEquals(reviewId > 0, true);
   });
 
-  it("adds reviewers with INSERT OR IGNORE", () => {
-    const database = createTestDb();
-    insertTestPR(database);
-    const reviewId = insertReview(database, {
+  it("adds reviewers with INSERT OR IGNORE", async () => {
+    const client = await createTestDb();
+    await insertTestPR(client);
+    const reviewId = await insertReview(client, {
       repo: "org/repo",
       prNumber: 1,
       requestedAt: "2026-04-01T13:00:00Z",
     });
-    addReviewRequestedReviewer(database, reviewId, "bob");
-    addReviewRequestedReviewer(database, reviewId, "carol");
+    await addReviewRequestedReviewer(client, reviewId, "bob");
+    await addReviewRequestedReviewer(client, reviewId, "carol");
     // Duplicate should not throw
-    addReviewRequestedReviewer(database, reviewId, "bob");
+    await addReviewRequestedReviewer(client, reviewId, "bob");
 
-    const reviewers = database.prepare(
-      "SELECT reviewer FROM review_requested_reviewers WHERE review_id = ? ORDER BY reviewer",
-    ).all(reviewId) as Array<{ reviewer: string }>;
-    assertEquals(reviewers.length, 2);
-    assertEquals(reviewers[0].reviewer, "bob");
-    assertEquals(reviewers[1].reviewer, "carol");
+    const result = await client.execute({
+      sql: "SELECT reviewer FROM review_requested_reviewers WHERE review_id = ? ORDER BY reviewer",
+      args: [reviewId],
+    });
+    assertEquals(result.rows.length, 2);
+    assertEquals(result.rows[0].reviewer, "bob");
+    assertEquals(result.rows[1].reviewer, "carol");
   });
 
-  it("gets last review for a PR", () => {
-    const database = createTestDb();
-    insertTestPR(database);
-    insertReview(database, {
+  it("gets last review for a PR", async () => {
+    const client = await createTestDb();
+    await insertTestPR(client);
+    await insertReview(client, {
       repo: "org/repo",
       prNumber: 1,
       requestedAt: "2026-04-01T13:00:00Z",
     });
-    const secondId = insertReview(database, {
+    const secondId = await insertReview(client, {
       repo: "org/repo",
       prNumber: 1,
       requestedAt: "2026-04-02T13:00:00Z",
     });
 
-    const lastReview = getLastReviewForPR(database, "org/repo", 1);
+    const lastReview = await getLastReviewForPR(client, "org/repo", 1);
     assertNotEquals(lastReview, null);
     assertEquals(lastReview!.id, secondId);
     assertEquals(lastReview!.requested_at, "2026-04-02T13:00:00Z");
   });
 
-  it("returns null when no reviews exist", () => {
-    const database = createTestDb();
-    insertTestPR(database);
-    assertEquals(getLastReviewForPR(database, "org/repo", 1), null);
+  it("returns null when no reviews exist", async () => {
+    const client = await createTestDb();
+    await insertTestPR(client);
+    assertEquals(await getLastReviewForPR(client, "org/repo", 1), null);
   });
 
-  it("completes a review", () => {
-    const database = createTestDb();
-    insertTestPR(database);
-    const reviewId = insertReview(database, {
+  it("completes a review", async () => {
+    const client = await createTestDb();
+    await insertTestPR(client);
+    const reviewId = await insertReview(client, {
       repo: "org/repo",
       prNumber: 1,
       requestedAt: "2026-04-01T13:00:00Z",
     });
-    completeReview(database, reviewId, "2026-04-01T15:00:00Z", "bob");
+    await completeReview(client, reviewId, "2026-04-01T15:00:00Z", "bob");
 
-    const review = getLastReviewForPR(database, "org/repo", 1);
+    const review = await getLastReviewForPR(client, "org/repo", 1);
     assertEquals(review!.completed_at, "2026-04-01T15:00:00Z");
     assertEquals(review!.responded_by, "bob");
   });
 });
 
 describe("cursor helpers", () => {
-  it("returns null for unknown repo cursor", () => {
-    const database = createTestDb();
-    assertEquals(getRepoCursor(database, "org/repo"), null);
+  it("returns null for unknown repo cursor", async () => {
+    const client = await createTestDb();
+    assertEquals(await getRepoCursor(client, "org/repo"), null);
   });
 
-  it("sets and gets repo cursor", () => {
-    const database = createTestDb();
-    setRepoCursor(database, "org/repo", "cursor_abc");
-    assertEquals(getRepoCursor(database, "org/repo"), "cursor_abc");
+  it("sets and gets repo cursor", async () => {
+    const client = await createTestDb();
+    await setRepoCursor(client, "org/repo", "cursor_abc");
+    assertEquals(await getRepoCursor(client, "org/repo"), "cursor_abc");
   });
 
-  it("updates repo cursor on conflict", () => {
-    const database = createTestDb();
-    setRepoCursor(database, "org/repo", "cursor_1");
-    setRepoCursor(database, "org/repo", "cursor_2");
-    assertEquals(getRepoCursor(database, "org/repo"), "cursor_2");
+  it("updates repo cursor on conflict", async () => {
+    const client = await createTestDb();
+    await setRepoCursor(client, "org/repo", "cursor_1");
+    await setRepoCursor(client, "org/repo", "cursor_2");
+    assertEquals(await getRepoCursor(client, "org/repo"), "cursor_2");
   });
 
-  it("updates timeline cursor on a PR", () => {
-    const database = createTestDb();
-    insertTestPR(database);
-    updateTimelineCursor(database, "org/repo", 1, "timeline_xyz");
+  it("updates timeline cursor on a PR", async () => {
+    const client = await createTestDb();
+    await insertTestPR(client);
+    await updateTimelineCursor(client, "org/repo", 1, "timeline_xyz");
 
-    const row = database.prepare(
-      "SELECT timeline_cursor FROM pull_requests WHERE repo = ? AND number = ?",
-    ).get("org/repo", 1) as { timeline_cursor: string };
-    assertEquals(row.timeline_cursor, "timeline_xyz");
+    const result = await client.execute({
+      sql: "SELECT timeline_cursor FROM pull_requests WHERE repo = ? AND number = ?",
+      args: ["org/repo", 1],
+    });
+    assertEquals(result.rows[0].timeline_cursor, "timeline_xyz");
   });
 });
 
 describe("metadata helpers", () => {
-  it("returns null when lastFetchedAt is not set", () => {
-    const database = createTestDb();
-    assertEquals(getLastFetchedAt(database), null);
+  it("returns null when lastFetchedAt is not set", async () => {
+    const client = await createTestDb();
+    assertEquals(await getLastFetchedAt(client), null);
   });
 
-  it("sets and gets lastFetchedAt", () => {
-    const database = createTestDb();
+  it("sets and gets lastFetchedAt", async () => {
+    const client = await createTestDb();
     const date = new Date("2026-04-07T10:00:00Z");
-    setLastFetchedAt(database, date);
-    const result = getLastFetchedAt(database);
+    await setLastFetchedAt(client, date);
+    const result = await getLastFetchedAt(client);
     assertEquals(result!.toISOString(), date.toISOString());
   });
 
-  it("updates lastFetchedAt on conflict", () => {
-    const database = createTestDb();
-    setLastFetchedAt(database, new Date("2026-04-06T10:00:00Z"));
-    setLastFetchedAt(database, new Date("2026-04-07T10:00:00Z"));
-    const result = getLastFetchedAt(database);
+  it("updates lastFetchedAt on conflict", async () => {
+    const client = await createTestDb();
+    await setLastFetchedAt(client, new Date("2026-04-06T10:00:00Z"));
+    await setLastFetchedAt(client, new Date("2026-04-07T10:00:00Z"));
+    const result = await getLastFetchedAt(client);
     assertEquals(result!.toISOString(), "2026-04-07T10:00:00.000Z");
   });
 });
 
 describe("loadReviewWindows", () => {
-  it("returns closed review windows", () => {
-    const database = createTestDb();
-    insertTestPR(database, { createdAt: "2026-04-01T12:00:00Z" });
-    const reviewId = insertReview(database, {
+  it("returns closed review windows", async () => {
+    const client = await createTestDb();
+    await insertTestPR(client, { createdAt: "2026-04-01T12:00:00Z" });
+    const reviewId = await insertReview(client, {
       repo: "org/repo",
       prNumber: 1,
       requestedAt: "2026-04-01T14:00:00Z",
     });
-    addReviewRequestedReviewer(database, reviewId, "bob");
-    completeReview(database, reviewId, "2026-04-01T16:00:00Z", "bob");
+    await addReviewRequestedReviewer(client, reviewId, "bob");
+    await completeReview(client, reviewId, "2026-04-01T16:00:00Z", "bob");
 
-    const windows = loadReviewWindows(database, "2026-03-01T00:00:00Z");
+    const windows = await loadReviewWindows(client, "2026-03-01T00:00:00Z");
     assertEquals(windows.length, 1);
     assertEquals(windows[0].pr.number, 1);
     assertEquals(windows[0].pr.title, "Test PR");
@@ -287,81 +283,81 @@ describe("loadReviewWindows", () => {
     assertEquals(windows[0].businessHours >= 0, true);
   });
 
-  it("includes open reviews only for OPEN PRs", () => {
-    const database = createTestDb();
+  it("includes open reviews only for OPEN PRs", async () => {
+    const client = await createTestDb();
     // OPEN PR with open review — should be included
-    insertTestPR(database, { number: 1, state: "OPEN", createdAt: "2026-04-01T12:00:00Z" });
-    insertReview(database, {
+    await insertTestPR(client, { number: 1, state: "OPEN", createdAt: "2026-04-01T12:00:00Z" });
+    await insertReview(client, {
       repo: "org/repo",
       prNumber: 1,
       requestedAt: "2026-04-01T14:00:00Z",
     });
 
     // CLOSED PR with open review — should be excluded
-    insertTestPR(database, { number: 2, state: "CLOSED", createdAt: "2026-04-01T12:00:00Z" });
-    insertReview(database, {
+    await insertTestPR(client, { number: 2, state: "CLOSED", createdAt: "2026-04-01T12:00:00Z" });
+    await insertReview(client, {
       repo: "org/repo",
       prNumber: 2,
       requestedAt: "2026-04-01T14:00:00Z",
     });
 
-    const windows = loadReviewWindows(database, "2026-03-01T00:00:00Z");
+    const windows = await loadReviewWindows(client, "2026-03-01T00:00:00Z");
     assertEquals(windows.length, 1);
     assertEquals(windows[0].pr.number, 1);
   });
 
-  it("filters by lookback date", () => {
-    const database = createTestDb();
+  it("filters by lookback date", async () => {
+    const client = await createTestDb();
     // PR created before the lookback — should be excluded
-    insertTestPR(database, { number: 1, createdAt: "2026-01-01T12:00:00Z" });
-    const reviewId1 = insertReview(database, {
+    await insertTestPR(client, { number: 1, createdAt: "2026-01-01T12:00:00Z" });
+    const reviewId1 = await insertReview(client, {
       repo: "org/repo",
       prNumber: 1,
       requestedAt: "2026-01-01T14:00:00Z",
     });
-    completeReview(database, reviewId1, "2026-01-01T16:00:00Z", "bob");
+    await completeReview(client, reviewId1, "2026-01-01T16:00:00Z", "bob");
 
     // PR created after the lookback — should be included
-    insertTestPR(database, { number: 2, createdAt: "2026-04-01T12:00:00Z" });
-    const reviewId2 = insertReview(database, {
+    await insertTestPR(client, { number: 2, createdAt: "2026-04-01T12:00:00Z" });
+    const reviewId2 = await insertReview(client, {
       repo: "org/repo",
       prNumber: 2,
       requestedAt: "2026-04-01T14:00:00Z",
     });
-    completeReview(database, reviewId2, "2026-04-01T16:00:00Z", "carol");
+    await completeReview(client, reviewId2, "2026-04-01T16:00:00Z", "carol");
 
-    const windows = loadReviewWindows(database, "2026-03-01T00:00:00Z");
+    const windows = await loadReviewWindows(client, "2026-03-01T00:00:00Z");
     assertEquals(windows.length, 1);
     assertEquals(windows[0].pr.number, 2);
   });
 
-  it("handles reviews with multiple reviewers", () => {
-    const database = createTestDb();
-    insertTestPR(database, { createdAt: "2026-04-01T12:00:00Z" });
-    const reviewId = insertReview(database, {
+  it("handles reviews with multiple reviewers", async () => {
+    const client = await createTestDb();
+    await insertTestPR(client, { createdAt: "2026-04-01T12:00:00Z" });
+    const reviewId = await insertReview(client, {
       repo: "org/repo",
       prNumber: 1,
       requestedAt: "2026-04-01T14:00:00Z",
     });
-    addReviewRequestedReviewer(database, reviewId, "bob");
-    addReviewRequestedReviewer(database, reviewId, "carol");
-    completeReview(database, reviewId, "2026-04-01T16:00:00Z", "bob");
+    await addReviewRequestedReviewer(client, reviewId, "bob");
+    await addReviewRequestedReviewer(client, reviewId, "carol");
+    await completeReview(client, reviewId, "2026-04-01T16:00:00Z", "bob");
 
-    const windows = loadReviewWindows(database, "2026-03-01T00:00:00Z");
+    const windows = await loadReviewWindows(client, "2026-03-01T00:00:00Z");
     assertEquals(windows[0].requestedReviewers.sort(), ["bob", "carol"]);
   });
 
-  it("returns empty requestedReviewers when none assigned", () => {
-    const database = createTestDb();
-    insertTestPR(database, { createdAt: "2026-04-01T12:00:00Z" });
-    const reviewId = insertReview(database, {
+  it("returns empty requestedReviewers when none assigned", async () => {
+    const client = await createTestDb();
+    await insertTestPR(client, { createdAt: "2026-04-01T12:00:00Z" });
+    const reviewId = await insertReview(client, {
       repo: "org/repo",
       prNumber: 1,
       requestedAt: "2026-04-01T14:00:00Z",
     });
-    completeReview(database, reviewId, "2026-04-01T16:00:00Z", "bob");
+    await completeReview(client, reviewId, "2026-04-01T16:00:00Z", "bob");
 
-    const windows = loadReviewWindows(database, "2026-03-01T00:00:00Z");
+    const windows = await loadReviewWindows(client, "2026-03-01T00:00:00Z");
     assertEquals(windows[0].requestedReviewers, []);
   });
 });

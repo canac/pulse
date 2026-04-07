@@ -1,4 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
+import type { Client } from "@libsql/client";
 import { TEAM_MEMBERS } from "./config.ts";
 import type { TimelineItem } from "./github.ts";
 import {
@@ -10,15 +10,15 @@ import {
 
 const TEAM_MEMBER_SET = new Set<string>(TEAM_MEMBERS);
 
-export function ingestTimelineEvents(
-  database: DatabaseSync,
+export async function ingestTimelineEvents(
+  client: Client,
   repo: string,
   prNumber: number,
   prAuthor: string,
   events: TimelineItem[],
-): void {
+): Promise<void> {
   for (const event of events) {
-    const lastReview = getLastReviewForPR(database, repo, prNumber);
+    const lastReview = await getLastReviewForPR(client, repo, prNumber);
     const hasOpenWindow = lastReview !== null && lastReview.completed_at === null;
 
     if (event.__typename === "ReviewRequestedEvent") {
@@ -28,14 +28,14 @@ export function ingestTimelineEvents(
       }
 
       if (hasOpenWindow) {
-        addReviewRequestedReviewer(database, lastReview.id, reviewerLogin);
+        await addReviewRequestedReviewer(client, lastReview.id, reviewerLogin);
       } else {
-        const reviewId = insertReview(database, {
+        const reviewId = await insertReview(client, {
           repo,
           prNumber,
           requestedAt: event.createdAt,
         });
-        addReviewRequestedReviewer(database, reviewId, reviewerLogin);
+        await addReviewRequestedReviewer(client, reviewId, reviewerLogin);
       }
     } else if (
       event.__typename === "PullRequestReview" ||
@@ -50,7 +50,7 @@ export function ingestTimelineEvents(
         continue;
       }
 
-      completeReview(database, lastReview.id, event.createdAt, authorLogin);
+      await completeReview(client, lastReview.id, event.createdAt, authorLogin);
     }
   }
 }

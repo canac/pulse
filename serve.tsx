@@ -3,6 +3,7 @@ import { getToken, LOOKBACK_DAYS } from "./config.ts";
 import {
   getDb,
   getLastFetchedAt,
+  initDb,
   loadReviewWindows,
   type ReviewWindowView,
 } from "./db.ts";
@@ -21,9 +22,9 @@ let lastFetchedAt = 0;
 
 function backgroundRefresh(): void {
   const token = getToken();
-  const database = getDb();
+  const client = getDb();
   const startTime = performance.now();
-  sync(token, database).then(() => {
+  sync(token, client).then(() => {
     const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
     console.log(`Background refresh complete in ${elapsed}s`);
   }).catch((error) => {
@@ -38,17 +39,17 @@ function maybeRefreshInBackground(): void {
   }
 }
 
-function loadWindowsAndMeta(): {
+async function loadWindowsAndMeta(): Promise<{
   allWindows: ReviewWindowView[];
   lastUpdated: Date | null;
-} {
-  const database = getDb();
+}> {
+  const client = getDb();
   const since = Temporal.Now.instant().subtract({
     hours: LOOKBACK_DAYS * 24,
   });
 
-  const allWindows = loadReviewWindows(database, since.toString());
-  const lastUpdated = getLastFetchedAt(database);
+  const allWindows = await loadReviewWindows(client, since.toString());
+  const lastUpdated = await getLastFetchedAt(client);
 
   return { allWindows, lastUpdated };
 }
@@ -73,8 +74,8 @@ app.use(async (ctx, next) => {
   }
 });
 
-app.get("/", (ctx) => {
-  const { allWindows, lastUpdated } = loadWindowsAndMeta();
+app.get("/", async (ctx) => {
+  const { allWindows, lastUpdated } = await loadWindowsAndMeta();
   maybeRefreshInBackground();
   return ctx.html(
     <WaitingPage
@@ -84,8 +85,8 @@ app.get("/", (ctx) => {
   );
 });
 
-app.get("/response-times", (ctx) => {
-  const { allWindows, lastUpdated } = loadWindowsAndMeta();
+app.get("/response-times", async (ctx) => {
+  const { allWindows, lastUpdated } = await loadWindowsAndMeta();
   const closedWindows = allWindows.filter((window) =>
     window.respondedAt !== null
   );
@@ -102,7 +103,8 @@ app.get("/response-times", (ctx) => {
   );
 });
 
-export function startServer(): void {
+export async function startServer(): Promise<void> {
+  await initDb();
   backgroundRefresh();
   const portEnv = Deno.env.get("PORT");
   const port = portEnv ? Number(portEnv) : undefined;

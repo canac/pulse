@@ -1,3 +1,3 @@
 import { startServer } from "./serve.tsx";
 
-startServer();
+await startServer();

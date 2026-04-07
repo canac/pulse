@@ -1,5 +1,7 @@
-import { DatabaseSync } from "node:sqlite";
+import { createClient, type Client } from "@libsql/client";
 import { businessHoursElapsed } from "./business-hours.ts";
+
+export type { Client };
 
 // ── Types ──
 
@@ -55,12 +57,11 @@ export interface ReviewWindowView {
 
 // ── Schema ──
 
-export function createSchema(database: DatabaseSync): void {
-  database.exec("PRAGMA journal_mode = WAL");
-  database.exec("PRAGMA foreign_keys = ON");
+export async function createSchema(client: Client): Promise<void> {
+  await client.execute("PRAGMA foreign_keys = ON");
 
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS pull_requests (
+  await client.batch([
+    `CREATE TABLE IF NOT EXISTS pull_requests (
       repo TEXT NOT NULL,
       number INTEGER NOT NULL,
       node_id TEXT NOT NULL,
@@ -72,11 +73,8 @@ export function createSchema(database: DatabaseSync): void {
       created_at TEXT NOT NULL,
       timeline_cursor TEXT,
       PRIMARY KEY (repo, number)
-    )
-  `);
-
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS reviews (
+    )`,
+    `CREATE TABLE IF NOT EXISTS reviews (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       repo TEXT NOT NULL,
       pr_number INTEGER NOT NULL,
@@ -84,194 +82,219 @@ export function createSchema(database: DatabaseSync): void {
       completed_at TEXT,
       responded_by TEXT,
       FOREIGN KEY (repo, pr_number) REFERENCES pull_requests(repo, number)
-    )
-  `);
-
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS review_requested_reviewers (
+    )`,
+    `CREATE TABLE IF NOT EXISTS review_requested_reviewers (
       review_id INTEGER NOT NULL,
       reviewer TEXT NOT NULL,
       PRIMARY KEY (review_id, reviewer),
       FOREIGN KEY (review_id) REFERENCES reviews(id)
-    )
-  `);
-
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS repo_cursors (
+    )`,
+    `CREATE TABLE IF NOT EXISTS repo_cursors (
       repo TEXT PRIMARY KEY,
       prs_cursor TEXT NOT NULL
-    )
-  `);
-
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS metadata (
+    )`,
+    `CREATE TABLE IF NOT EXISTS metadata (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
-    )
-  `);
+    )`,
+  ]);
 }
 
 // ── Singleton ──
 
-let singletonDb: DatabaseSync | null = null;
+let singletonClient: Client | null = null;
 
-export function getDb(): DatabaseSync {
-  if (!singletonDb) {
-    singletonDb = new DatabaseSync("pulse.db");
-    createSchema(singletonDb);
+export function getDb(): Client {
+  if (!singletonClient) {
+    throw new Error("Database not initialized. Call initDb() first.");
   }
-  return singletonDb;
+  return singletonClient;
+}
+
+export async function initDb(): Promise<void> {
+  if (!singletonClient) {
+    const url = Deno.env.get("TURSO_URL");
+    const authToken = Deno.env.get("TURSO_AUTH_TOKEN");
+    if (!url) {
+      throw new Error("TURSO_URL must be set in environment or .env file");
+    }
+    singletonClient = createClient({ url, authToken });
+    await createSchema(singletonClient);
+  }
 }
 
 // ── Pull Requests ──
 
-export function upsertPullRequest(
-  database: DatabaseSync,
+export async function upsertPullRequest(
+  client: Client,
   input: UpsertPullRequestInput,
-): void {
-  database.prepare(`
-    INSERT INTO pull_requests (repo, number, node_id, title, url, author, state, is_draft, created_at)
+): Promise<void> {
+  await client.execute({
+    sql: `INSERT INTO pull_requests (repo, number, node_id, title, url, author, state, is_draft, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (repo, number) DO UPDATE SET
       title = excluded.title,
       state = excluded.state,
-      is_draft = excluded.is_draft
-  `).run(
-    input.repo,
-    input.number,
-    input.nodeId,
-    input.title,
-    input.url,
-    input.author,
-    input.state,
-    input.isDraft ? 1 : 0,
-    input.createdAt,
-  );
+      is_draft = excluded.is_draft`,
+    args: [
+      input.repo,
+      input.number,
+      input.nodeId,
+      input.title,
+      input.url,
+      input.author,
+      input.state,
+      input.isDraft ? 1 : 0,
+      input.createdAt,
+    ],
+  });
 }
 
-export function getOpenPullRequests(
-  database: DatabaseSync,
-): PullRequestRow[] {
-  return database.prepare(
+export async function getOpenPullRequests(
+  client: Client,
+): Promise<PullRequestRow[]> {
+  const result = await client.execute(
     "SELECT * FROM pull_requests WHERE state = 'OPEN'",
-  ).all() as unknown as PullRequestRow[];
+  );
+  return result.rows as unknown as PullRequestRow[];
 }
 
 // ── Reviews ──
 
-export function insertReview(
-  database: DatabaseSync,
+export async function insertReview(
+  client: Client,
   input: InsertReviewInput,
-): number {
-  const result = database.prepare(`
-    INSERT INTO reviews (repo, pr_number, requested_at)
-    VALUES (?, ?, ?)
-  `).run(input.repo, input.prNumber, input.requestedAt);
+): Promise<number> {
+  const result = await client.execute({
+    sql: "INSERT INTO reviews (repo, pr_number, requested_at) VALUES (?, ?, ?)",
+    args: [input.repo, input.prNumber, input.requestedAt],
+  });
   return Number(result.lastInsertRowid);
 }
 
-export function addReviewRequestedReviewer(
-  database: DatabaseSync,
+export async function addReviewRequestedReviewer(
+  client: Client,
   reviewId: number,
   reviewer: string,
-): void {
-  database.prepare(`
-    INSERT OR IGNORE INTO review_requested_reviewers (review_id, reviewer)
-    VALUES (?, ?)
-  `).run(reviewId, reviewer);
+): Promise<void> {
+  await client.execute({
+    sql: `INSERT OR IGNORE INTO review_requested_reviewers (review_id, reviewer)
+    VALUES (?, ?)`,
+    args: [reviewId, reviewer],
+  });
 }
 
-export function getLastReviewForPR(
-  database: DatabaseSync,
+export async function getLastReviewForPR(
+  client: Client,
   repo: string,
   prNumber: number,
-): ReviewRow | null {
-  const row = database.prepare(`
-    SELECT * FROM reviews
+): Promise<ReviewRow | null> {
+  const result = await client.execute({
+    sql: `SELECT * FROM reviews
     WHERE repo = ? AND pr_number = ?
-    ORDER BY id DESC LIMIT 1
-  `).get(repo, prNumber) as ReviewRow | undefined;
-  return row ?? null;
+    ORDER BY id DESC LIMIT 1`,
+    args: [repo, prNumber],
+  });
+  if (result.rows.length === 0) {
+    return null;
+  }
+  return result.rows[0] as unknown as ReviewRow;
 }
 
-export function completeReview(
-  database: DatabaseSync,
+export async function completeReview(
+  client: Client,
   reviewId: number,
   completedAt: string,
   respondedBy: string,
-): void {
-  database.prepare(`
-    UPDATE reviews SET completed_at = ?, responded_by = ? WHERE id = ?
-  `).run(completedAt, respondedBy, reviewId);
+): Promise<void> {
+  await client.execute({
+    sql: "UPDATE reviews SET completed_at = ?, responded_by = ? WHERE id = ?",
+    args: [completedAt, respondedBy, reviewId],
+  });
 }
 
 // ── Cursors ──
 
-export function getRepoCursor(
-  database: DatabaseSync,
+export async function getRepoCursor(
+  client: Client,
   repo: string,
-): string | null {
-  const row = database.prepare(
-    "SELECT prs_cursor FROM repo_cursors WHERE repo = ?",
-  ).get(repo) as { prs_cursor: string } | undefined;
-  return row?.prs_cursor ?? null;
+): Promise<string | null> {
+  const result = await client.execute({
+    sql: "SELECT prs_cursor FROM repo_cursors WHERE repo = ?",
+    args: [repo],
+  });
+  if (result.rows.length === 0) {
+    return null;
+  }
+  return result.rows[0].prs_cursor as string;
 }
 
-export function getAllRepoCursors(
-  database: DatabaseSync,
-): Map<string, string> {
-  const rows = database.prepare(
+export async function getAllRepoCursors(
+  client: Client,
+): Promise<Map<string, string>> {
+  const result = await client.execute(
     "SELECT repo, prs_cursor FROM repo_cursors",
-  ).all() as { repo: string; prs_cursor: string }[];
-  return new Map(rows.map((row) => [row.repo, row.prs_cursor]));
+  );
+  return new Map(
+    result.rows.map((row) => [row.repo as string, row.prs_cursor as string]),
+  );
 }
 
-export function setRepoCursor(
-  database: DatabaseSync,
+export async function setRepoCursor(
+  client: Client,
   repo: string,
   cursor: string,
-): void {
-  database.prepare(`
-    INSERT INTO repo_cursors (repo, prs_cursor) VALUES (?, ?)
-    ON CONFLICT (repo) DO UPDATE SET prs_cursor = excluded.prs_cursor
-  `).run(repo, cursor);
+): Promise<void> {
+  await client.execute({
+    sql: `INSERT INTO repo_cursors (repo, prs_cursor) VALUES (?, ?)
+    ON CONFLICT (repo) DO UPDATE SET prs_cursor = excluded.prs_cursor`,
+    args: [repo, cursor],
+  });
 }
 
-export function updateTimelineCursor(
-  database: DatabaseSync,
+export async function updateTimelineCursor(
+  client: Client,
   repo: string,
   prNumber: number,
   cursor: string,
-): void {
-  database.prepare(`
-    UPDATE pull_requests SET timeline_cursor = ? WHERE repo = ? AND number = ?
-  `).run(cursor, repo, prNumber);
+): Promise<void> {
+  await client.execute({
+    sql: "UPDATE pull_requests SET timeline_cursor = ? WHERE repo = ? AND number = ?",
+    args: [cursor, repo, prNumber],
+  });
 }
 
 // ── Metadata ──
 
-export function getLastFetchedAt(database: DatabaseSync): Date | null {
-  const row = database.prepare(
+export async function getLastFetchedAt(client: Client): Promise<Date | null> {
+  const result = await client.execute(
     "SELECT value FROM metadata WHERE key = 'last_fetched_at'",
-  ).get() as { value: string } | undefined;
-  return row ? new Date(row.value) : null;
+  );
+  if (result.rows.length === 0) {
+    return null;
+  }
+  return new Date(result.rows[0].value as string);
 }
 
-export function setLastFetchedAt(database: DatabaseSync, date: Date): void {
-  database.prepare(`
-    INSERT INTO metadata (key, value) VALUES ('last_fetched_at', ?)
-    ON CONFLICT (key) DO UPDATE SET value = excluded.value
-  `).run(date.toISOString());
+export async function setLastFetchedAt(
+  client: Client,
+  date: Date,
+): Promise<void> {
+  await client.execute({
+    sql: `INSERT INTO metadata (key, value) VALUES ('last_fetched_at', ?)
+    ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+    args: [date.toISOString()],
+  });
 }
 
 // ── Review Windows ──
 
-export function loadReviewWindows(
-  database: DatabaseSync,
+export async function loadReviewWindows(
+  client: Client,
   sinceIso: string,
-): ReviewWindowView[] {
-  const rows = database.prepare(`
-    SELECT r.id, r.repo, r.pr_number, r.requested_at, r.completed_at, r.responded_by,
+): Promise<ReviewWindowView[]> {
+  const result = await client.execute({
+    sql: `SELECT r.id, r.repo, r.pr_number, r.requested_at, r.completed_at, r.responded_by,
            p.title, p.url, p.author, p.number, p.state,
            GROUP_CONCAT(rr.reviewer) AS reviewers
     FROM reviews r
@@ -279,41 +302,30 @@ export function loadReviewWindows(
     LEFT JOIN review_requested_reviewers rr ON r.id = rr.review_id
     WHERE p.created_at >= ?
       AND (r.completed_at IS NOT NULL OR p.state = 'OPEN')
-    GROUP BY r.id
-  `).all(sinceIso) as Array<{
-    id: number;
-    repo: string;
-    pr_number: number;
-    requested_at: string;
-    completed_at: string | null;
-    responded_by: string | null;
-    title: string;
-    url: string;
-    author: string;
-    number: number;
-    state: string;
-    reviewers: string | null;
-  }>;
+    GROUP BY r.id`,
+    args: [sinceIso],
+  });
 
-  return rows.map((row) => {
-    const requestedAt = Temporal.Instant.from(row.requested_at);
+  return result.rows.map((row) => {
+    const requestedAt = Temporal.Instant.from(row.requested_at as string);
     const respondedAt = row.completed_at
-      ? Temporal.Instant.from(row.completed_at)
+      ? Temporal.Instant.from(row.completed_at as string)
       : null;
     const endInstant = respondedAt ?? Temporal.Now.instant();
+    const reviewers = row.reviewers as string | null;
 
     return {
       pr: {
-        number: row.number,
-        title: row.title,
-        url: row.url,
-        author: row.author,
+        number: row.number as number,
+        title: row.title as string,
+        url: row.url as string,
+        author: row.author as string,
       },
-      repo: row.repo,
+      repo: row.repo as string,
       requestedAt,
       respondedAt,
-      respondedBy: row.responded_by,
-      requestedReviewers: row.reviewers ? row.reviewers.split(",") : [],
+      respondedBy: row.responded_by as string | null,
+      requestedReviewers: reviewers ? reviewers.split(",") : [],
       businessHours: businessHoursElapsed(requestedAt, endInstant),
     };
   });

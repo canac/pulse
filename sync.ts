@@ -1,4 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
+import type { Client } from "@libsql/client";
 import { LOOKBACK_DAYS, REPOS, TEAM_MEMBERS } from "./config.ts";
 import {
   type FetchPagesResult,
@@ -19,7 +19,7 @@ import { ingestTimelineEvents } from "./ingest.ts";
 
 async function fetchAndIngestTimeline(
   token: string,
-  database: DatabaseSync,
+  client: Client,
   pullRequest: PullRequestRow,
 ): Promise<void> {
   let cursor = pullRequest.timeline_cursor;
@@ -27,7 +27,7 @@ async function fetchAndIngestTimeline(
   while (true) {
     const timeline = await fetchTimeline(token, pullRequest.node_id, cursor);
 
-    upsertPullRequest(database, {
+    await upsertPullRequest(client, {
       repo: pullRequest.repo,
       number: pullRequest.number,
       nodeId: pullRequest.node_id,
@@ -39,8 +39,8 @@ async function fetchAndIngestTimeline(
       createdAt: pullRequest.created_at,
     });
 
-    ingestTimelineEvents(
-      database,
+    await ingestTimelineEvents(
+      client,
       pullRequest.repo,
       pullRequest.number,
       pullRequest.author,
@@ -55,8 +55,8 @@ async function fetchAndIngestTimeline(
   }
 
   if (cursor !== null) {
-    updateTimelineCursor(
-      database,
+    await updateTimelineCursor(
+      client,
       pullRequest.repo,
       pullRequest.number,
       cursor,
@@ -66,7 +66,7 @@ async function fetchAndIngestTimeline(
 
 async function ingestNewPRs(
   token: string,
-  database: DatabaseSync,
+  client: Client,
   results: Map<string, FetchPagesResult>,
 ): Promise<void> {
   const since = Temporal.Now.instant().subtract({
@@ -90,7 +90,7 @@ async function ingestNewPRs(
         continue;
       }
 
-      upsertPullRequest(database, {
+      await upsertPullRequest(client, {
         repo: pullRequest.repo,
         number: pullRequest.number,
         nodeId: pullRequest.id,
@@ -102,7 +102,7 @@ async function ingestNewPRs(
         createdAt: pullRequest.createdAt,
       });
 
-      await fetchAndIngestTimeline(token, database, {
+      await fetchAndIngestTimeline(token, client, {
         repo: pullRequest.repo,
         number: pullRequest.number,
         node_id: pullRequest.id,
@@ -117,53 +117,53 @@ async function ingestNewPRs(
     }
 
     if (result.endCursor !== null) {
-      setRepoCursor(database, repo, result.endCursor);
+      await setRepoCursor(client, repo, result.endCursor);
     }
   }
 }
 
 export async function initialLoad(
   token: string,
-  database: DatabaseSync,
+  client: Client,
 ): Promise<void> {
   const results = await fetchPullRequests(token);
-  await ingestNewPRs(token, database, results);
-  setLastFetchedAt(database, new Date());
+  await ingestNewPRs(token, client, results);
+  await setLastFetchedAt(client, new Date());
 }
 
 export async function incrementalRefresh(
   token: string,
-  database: DatabaseSync,
+  client: Client,
 ): Promise<void> {
   const newPRs = async () => {
-    const allCursors = getAllRepoCursors(database);
+    const allCursors = await getAllRepoCursors(client);
     const cursors = new Map<string, string | null>(
       REPOS.map((repo) => [repo, allCursors.get(repo) ?? null]),
     );
     const results = await fetchPullRequests(token, { cursors });
-    await ingestNewPRs(token, database, results);
+    await ingestNewPRs(token, client, results);
   };
 
   const openPRTimelines = async () => {
-    const openPullRequests = getOpenPullRequests(database);
+    const openPullRequests = await getOpenPullRequests(client);
     await Promise.all(
       openPullRequests.map((pullRequest) =>
-        fetchAndIngestTimeline(token, database, pullRequest)
+        fetchAndIngestTimeline(token, client, pullRequest)
       ),
     );
   };
 
   await Promise.all([newPRs(), openPRTimelines()]);
-  setLastFetchedAt(database, new Date());
+  await setLastFetchedAt(client, new Date());
 }
 
 export async function sync(
   token: string,
-  database: DatabaseSync,
+  client: Client,
 ): Promise<void> {
-  if (getRepoCursor(database, REPOS[0]) === null) {
-    await initialLoad(token, database);
+  if (await getRepoCursor(client, REPOS[0]) === null) {
+    await initialLoad(token, client);
   } else {
-    await incrementalRefresh(token, database);
+    await incrementalRefresh(token, client);
   }
 }
