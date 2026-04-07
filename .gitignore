@@ -1,2 +1,5 @@
 .DS_Store
 .env
+pulse.db
+pulse.db-wal
+pulse.db-shm
