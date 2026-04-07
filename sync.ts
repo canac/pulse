@@ -139,9 +139,11 @@ export async function incrementalRefresh(
 
   const openPRTimelines = async () => {
     const openPullRequests = getOpenPullRequests(database);
-    for (const pullRequest of openPullRequests) {
-      await fetchAndIngestTimeline(token, database, pullRequest);
-    }
+    await Promise.all(
+      openPullRequests.map((pullRequest) =>
+        fetchAndIngestTimeline(token, database, pullRequest)
+      ),
+    );
   };
 
   await Promise.all([newPRs(), openPRTimelines()]);
