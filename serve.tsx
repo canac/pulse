@@ -1,6 +1,11 @@
 import { Hono } from "hono";
 import { getToken, LOOKBACK_DAYS } from "./config.ts";
-import { getDb, getLastFetchedAt, loadReviewWindows, type ReviewWindowView } from "./db.ts";
+import {
+  getDb,
+  getLastFetchedAt,
+  loadReviewWindows,
+  type ReviewWindowView,
+} from "./db.ts";
 import { sync } from "./sync.ts";
 import { computeStats } from "./metrics.ts";
 import {
@@ -17,8 +22,10 @@ let lastFetchedAt = 0;
 function backgroundRefresh(): void {
   const token = getToken();
   const database = getDb();
+  const startTime = performance.now();
   sync(token, database).then(() => {
-    console.log("Background refresh complete");
+    const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+    console.log(`Background refresh complete in ${elapsed}s`);
   }).catch((error) => {
     console.error("Background refresh failed:", error);
   });
@@ -96,6 +103,7 @@ app.get("/response-times", (ctx) => {
 });
 
 export function startServer(): void {
+  backgroundRefresh();
   const portEnv = Deno.env.get("PORT");
   const port = portEnv ? Number(portEnv) : undefined;
   Deno.serve({ port }, app.fetch);
