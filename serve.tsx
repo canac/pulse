@@ -17,25 +17,16 @@ import {
 import { WaitingPage } from "./components/WaitingPage.tsx";
 import { ResponseTimesPage } from "./components/ResponseTimesPage.tsx";
 
-const SWR_COOLDOWN_MS = 5 * 60 * 1000;
-let lastFetchedAt = 0;
-
-function backgroundRefresh(): void {
+export async function backgroundRefresh(): Promise<void> {
   const token = getToken();
   const client = getDb();
   const startTime = performance.now();
-  sync(token, client).then(() => {
+  try {
+    await sync(token, client);
     const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
     console.log(`Background refresh complete in ${elapsed}s`);
-  }).catch((error) => {
+  } catch (error) {
     console.error("Background refresh failed:", error);
-  });
-}
-
-function maybeRefreshInBackground(): void {
-  if (Date.now() - lastFetchedAt > SWR_COOLDOWN_MS) {
-    lastFetchedAt = Date.now();
-    backgroundRefresh();
   }
 }
 
@@ -76,7 +67,6 @@ app.use(async (ctx, next) => {
 
 app.get("/", async (ctx) => {
   const { allWindows, lastUpdated } = await loadWindowsAndMeta();
-  maybeRefreshInBackground();
   return ctx.html(
     <WaitingPage
       waitingByReviewer={groupWaitingByReviewer(allWindows)}
@@ -90,7 +80,6 @@ app.get("/response-times", async (ctx) => {
   const closedWindows = allWindows.filter((window) =>
     window.respondedAt !== null
   );
-  maybeRefreshInBackground();
   return ctx.html(
     <ResponseTimesPage
       overall={computeStats(
